@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { runInNewContext } from "node:vm";
+import { createContext, runInContext } from "node:vm";
 import { PHASE_NAMES } from "../../timer.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -9,6 +9,7 @@ const scope = "https://example.test/cadence/";
 const cachePrefix = `cadence:${scope}:`;
 const previousCache = `sports-timer:${scope}:v3`;
 const code = await readFile(new URL("sw.js", root), "utf8");
+const versionCode = await readFile(new URL("version.js", root), "utf8");
 const manifest = JSON.parse(await readFile(new URL("manifest.webmanifest", root), "utf8"));
 
 function worker() {
@@ -17,7 +18,7 @@ function worker() {
   const installed = [];
   const deleted = [];
   const fetched = [];
-  const state = { installed, deleted, cached, fetched, cacheName: "", claimed: false };
+  const state = { cacheName: "", claimed: false, skippedWaiting: false };
   const cache = {
     async addAll(requests) {
       installed.push(...requests);
@@ -27,12 +28,17 @@ function worker() {
     },
   };
 
-  runInNewContext(code, {
+  const context = createContext({
     URL,
     Request,
+    importScripts(source) {
+      assert.equal(source, "./version.js");
+      runInContext(versionCode, context);
+    },
     self: {
       registration: { scope },
       clients: { async claim() { state.claimed = true; } },
+      async skipWaiting() { state.skippedWaiting = true; },
       addEventListener: (event, callback) => handlers.set(event, callback),
     },
     caches: {
@@ -52,6 +58,7 @@ function worker() {
       return new Response("network response");
     },
   });
+  runInContext(code, context);
 
   return {
     installed,
@@ -65,6 +72,12 @@ function worker() {
     async activate() {
       await new Promise((resolve) => handlers.get("activate")({ waitUntil: resolve }));
       return state.claimed;
+    },
+    async send(data) {
+      let confirmation;
+      handlers.get("message")({ data, waitUntil: (promise) => { confirmation = promise; } });
+      await confirmation;
+      return state.skippedWaiting;
     },
     request(url, method = "GET") {
       let response;
@@ -105,6 +118,7 @@ test("precaches all shipped UI, font, icon and voice assets with unique scoped U
   const serviceWorker = worker();
   const cacheName = await serviceWorker.install();
   assert.ok(cacheName.startsWith(cachePrefix));
+  assert.match(cacheName.slice(cachePrefix.length), /^v\d+\.\d+\.\d+$/);
   const cached = serviceWorker.installed.map((request) => request.url);
   assert.equal(new Set(cached).size, cached.length);
 
@@ -117,7 +131,7 @@ test("precaches all shipped UI, font, icon and voice assets with unique scoped U
   const html = await readFile(new URL("index.html", root), "utf8");
   const css = await readFile(new URL("styles.css", root), "utf8");
   const references = [
-    "./index.html", "./timer.mjs", "./cues.mjs",
+    "./index.html", "./timer.mjs", "./cues.mjs", "./pwa.mjs", "./version.js",
     ...Array.from(html.matchAll(/(?:href|src)="(\.\/[^"]+)"/g), (match) => match[1]),
     ...Array.from(css.matchAll(/url\("\.\/([^"]+)"\)/g), (match) => `./${match[1]}`),
     ...manifest.icons.map((icon) => icon.src),
@@ -133,6 +147,12 @@ test("activation removes only stale caches owned by this app", async () => {
   await serviceWorker.install();
   assert.equal(await serviceWorker.activate(), true);
   assert.deepEqual(serviceWorker.deleted, [`${cachePrefix}old`, previousCache]);
+});
+
+test("a waiting worker activates only when asked", async () => {
+  const serviceWorker = worker();
+  assert.equal(await serviceWorker.send("other"), false);
+  assert.equal(await serviceWorker.send("activate-update"), true);
 });
 
 test("serves cached navigation at the repository root with a query and hash", async () => {

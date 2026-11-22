@@ -1,8 +1,10 @@
+importScripts("./version.js");
+
 const prefix = `cadence:${self.registration.scope}:`;
 const previousPrefix = `sports-timer:${self.registration.scope}:`;
-const cacheName = `${prefix}v4`;
+const cacheName = `${prefix}v${globalThis.CADENCE_VERSION}`;
 const files = [
-  "./index.html", "./styles.css", "./app.mjs", "./timer.mjs", "./cues.mjs",
+  "./index.html", "./styles.css", "./app.mjs", "./timer.mjs", "./cues.mjs", "./pwa.mjs", "./version.js",
   "./manifest.webmanifest", "./assets/icon.svg",
   "./assets/icon-180.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/icon-maskable.png",
   "./assets/barlow-condensed-800.woff2", "./assets/bebas-neue-digits.woff2",
@@ -26,6 +28,10 @@ self.addEventListener("activate", (event) => {
     }
     await self.clients.claim();
   })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "activate-update") event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("fetch", (event) => {

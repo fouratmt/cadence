@@ -2,6 +2,7 @@ import axe from "axe-core";
 import { expect, test } from "./fixtures.mjs";
 
 test("keeps the oversized countdown and controls visible across viewport sizes", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("cadence:install-prompt", '{"dismissed":true}'));
   await page.goto("./");
   const viewports = [
     { width: 320, height: 568 },

@@ -17,7 +17,7 @@ const contentTypes = {
   ".woff2": "font/woff2",
 };
 
-async function serve(request, response) {
+async function serve(request, response, overrides) {
   const path = new URL(request.url, "http://127.0.0.1").pathname;
   if (path === "/favicon.ico") {
     response.writeHead(204).end();
@@ -31,15 +31,15 @@ async function serve(request, response) {
   }
 
   try {
-    const bytes = await readFile(new URL(file, root));
+    const bytes = overrides.get(file) ?? await readFile(new URL(file, root));
     response.writeHead(200, { "Content-Type": type }).end(bytes);
   } catch (error) {
     response.writeHead(error.code === "ENOENT" ? 404 : 500).end();
   }
 }
 
-export async function startSite() {
-  const server = createServer(serve);
+export async function startSite(overrides = new Map()) {
+  const server = createServer((request, response) => serve(request, response, overrides));
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   let closing;

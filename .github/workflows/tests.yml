@@ -55,7 +55,7 @@ jobs:
         run: |
           site_dir="$RUNNER_TEMP/pages"
           mkdir -p "$site_dir"
-          cp -R index.html styles.css app.mjs timer.mjs cues.mjs sw.js manifest.webmanifest assets "$site_dir/"
+          cp -R index.html styles.css app.mjs timer.mjs cues.mjs pwa.mjs version.js sw.js manifest.webmanifest assets "$site_dir/"
       - uses: actions/upload-pages-artifact@v4
         with:
           path: ${{ runner.temp }}/pages

@@ -36,9 +36,13 @@ Set **Settings → Pages → Build and deployment → Source** to **GitHub Actio
 
 The **Test and deploy** workflow runs the unit and browser suites before publishing the static app on pushes to `main`. Pull requests run the tests. To redeploy manually, run the workflow from `main` in the **Actions** tab. The site URL appears in the `github-pages` deployment and in Pages settings. Relative assets and service worker scope support repository URLs such as `https://username.github.io/cadence/`.
 
-When shipping changes to cached files, bump the version in `sw.js` and update its asset list if needed. A pending update takes over after the old app windows close. Open the app once online and wait for **More → Available offline** before going offline.
+Set the release version in [version.js](./version.js) before publishing changes to the app. Start from `1.0.0` and use semantic versioning. The header displays the version of the files currently loaded, and the service worker uses it for the offline cache. Update the asset list in `sw.js` when adding or removing files.
+
+When a new version finishes downloading, Cadence prompts you to update when you pause or finish a running timer. Choosing **Update** reloads the app with the new files. The browser can also activate a waiting update after all Cadence windows close. For the first release with update prompts, close any windows still running the older app before reopening Cadence.
 
 ## Install
+
+On the first visit over HTTPS, Cadence offers installation. The install action opens the browser’s prompt when supported or shows the steps in **More**. Open the app once online and wait for **More → Available offline** before going offline.
 
 - **iOS and iPadOS** · In Safari, Chrome, or Firefox, open the browser’s Share menu and choose **Add to Home Screen**. Leave **Open as Web App** enabled if offered. [Apple](https://support.apple.com/guide/iphone/iphea86e5236/ios) · [Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DiOS) · [Firefox](https://support.mozilla.org/kb/add-website-shortcut-your-home-screen-ios)
 - **Android** · In Chrome, use **Install and create shortcut → Install** or **Add to Home screen**. In Firefox, use **Menu → Install**. [Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid) · [Firefox](https://support.mozilla.org/kb/use-web-apps-firefox-android)
@@ -56,6 +60,7 @@ When shipping changes to cached files, bump the version in `sw.js` and update it
 - Three beep styles, optional bundled English spoken cues, a cue volume slider and preview, and an optional in-app screen flash. The flash respects reduced-motion settings.
 - Screen Wake Lock during running timers, requested again when you return. If the browser denies it, the app displays a message. A manually locked or suspended device can miss cues even though the timer catches up on return. [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) · [Chrome Page Lifecycle](https://developer.chrome.com/docs/web-platform/page-lifecycle-api)
 - Standalone install manifest and offline caching for the app, font, icons, and voice cues. On devices where the installed app uses a separate storage container, add your presets in the app window you plan to use.
+- First-visit install prompt, optional updates after a new version downloads, and the served version beside the Cadence name.
 
 ### Verified
 

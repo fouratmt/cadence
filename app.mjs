@@ -3,12 +3,14 @@ import {
   pad, PHASE_NAMES, stopwatchValue, validTimer, workoutFrame,
 } from "./timer.mjs";
 import { ScreenAwake, WorkoutCues } from "./cues.mjs";
+import { setupPwa } from "./pwa.mjs";
 
 const byId = (id) => document.getElementById(id);
 const modes = ["rounds", "tabata", "stopwatch", "more"];
 const modeNames = { rounds: "Rounds", tabata: "Tabata" };
 const storageKey = "cadence:v1";
 const sessionKey = "cadence:session:v1";
+const installKey = "cadence:install-prompt";
 const fields = {
   prepare: "Prepare",
   work: "Work",
@@ -23,7 +25,7 @@ function read(storageName, key, previousKey) {
     const saved = storage.getItem(key);
     if (saved !== null) return JSON.parse(saved) ?? {};
 
-    const previous = storage.getItem(previousKey);
+    const previous = previousKey ? storage.getItem(previousKey) : null;
     if (previous === null) return {};
     const data = JSON.parse(previous) ?? {};
     write(storageName, key, data);
@@ -75,8 +77,6 @@ let intervalTimeout;
 let stopwatchAnimation;
 let lastIndex = interval ? workoutFrame(interval.timeline, elapsedTime(interval)).index : -1;
 let lastRoundTrack = "";
-let installPrompt;
-let offlineStatus = "Preparing offline access";
 const cues = new WorkoutCues();
 const screenAwake = new ScreenAwake(drawWakeStatus);
 
@@ -149,10 +149,7 @@ function swapView(next, focus = true) {
 
   syncInterval(true);
   drawStopwatch();
-  if (view === "more") {
-    drawPresets();
-    drawInstall();
-  }
+  if (view === "more") drawPresets();
   if (focus) {
     byId(`${view}-title`).focus({ preventScroll: true });
     if (changed) window.scrollTo(0, 0);
@@ -368,9 +365,13 @@ function resetStopwatch() {
   syncWake();
 }
 
+function timerRunning() {
+  return (interval?.startedAt != null && activeInterval()) || stopwatch.startedAt !== null;
+}
+
 function syncWake(retry = false) {
-  const running = (interval?.startedAt != null && activeInterval()) || stopwatch.startedAt !== null;
-  screenAwake.update(settings.wake && running, retry);
+  screenAwake.update(settings.wake && timerRunning(), retry);
+  pwa.refresh();
 }
 
 function drawWakeStatus(status) {
@@ -582,63 +583,6 @@ function changeSetting(event) {
   persist();
 }
 
-function drawInstall() {
-  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const android = /Android/i.test(navigator.userAgent);
-  const firefox = /Firefox/i.test(navigator.userAgent);
-  const desktopSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|Edg/i.test(navigator.userAgent);
-  let steps = "Look for Install app or Add to Home Screen in your browser menu.";
-  if (standalone) steps = "Cadence is open as an installed app.";
-  else if (appleMobile) steps = "Open the browser’s Share menu and choose Add to Home Screen. Leave Open as Web App enabled if shown.";
-  else if (android && firefox) steps = "Open the Firefox menu, tap Install, then add Cadence to your Home Screen.";
-  else if (android) steps = "Open the Chrome menu and select Install and create shortcut, then Install. Some versions show Add to Home screen.";
-  else if (desktopSafari) steps = "In Safari, choose File → Add to Dock.";
-  else if (installPrompt) steps = "Install Cadence to open it in its own window.";
-
-  text("install-steps", steps);
-  byId("install-button").hidden = standalone || !installPrompt;
-  text("offline-status", offlineStatus);
-}
-
-async function installApp() {
-  const prompt = installPrompt;
-  if (!prompt) return;
-  installPrompt = undefined;
-  try {
-    await prompt.prompt();
-  } catch {
-    announce("Use your browser menu to install Cadence.");
-  }
-  drawInstall();
-}
-
-async function setupOffline() {
-  const updateStatus = (status) => {
-    offlineStatus = status;
-    drawInstall();
-  };
-  if (!("serviceWorker" in navigator)) {
-    updateStatus("Offline access unavailable");
-    return;
-  }
-  if (navigator.serviceWorker.controller) updateStatus("Available offline");
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (navigator.serviceWorker.controller) updateStatus("Available offline");
-  });
-  try {
-    const registration = await navigator.serviceWorker.register("./sw.js");
-    if (registration.active) updateStatus("Available offline");
-    const worker = registration.installing;
-    worker?.addEventListener("statechange", () => {
-      if (worker.state === "redundant" && !registration.active) updateStatus("Offline setup failed");
-    });
-  } catch {
-    if (!navigator.serviceWorker.controller) updateStatus("Offline access unavailable");
-  }
-}
-
 const actions = {
   settings: () => {
     if (view === "settings") return;
@@ -660,7 +604,10 @@ const actions = {
   "new-timer": () => openEditor("new"),
   "close-editor": closeEditor,
   "save-as": saveAs,
-  install: installApp,
+  install: () => pwa.install(),
+  "dismiss-install": () => pwa.dismissInstall(),
+  update: () => pwa.applyUpdate(),
+  "dismiss-update": () => pwa.dismissUpdate(),
   "preview-cues": () => { cues.prepare(settings.voice); cues.play("work", settings); },
   "load-default": (button) => loadPreset({ mode: button.dataset.defaultMode }),
   "open-preset": loadPreset,
@@ -698,15 +645,6 @@ settingsForm.addEventListener("input", changeSetting);
 settingsForm.addEventListener("submit", (event) => event.preventDefault());
 
 window.addEventListener("hashchange", () => setMode(readMode()));
-window.addEventListener("beforeinstallprompt", (event) => {
-  event.preventDefault();
-  installPrompt = event;
-  drawInstall();
-});
-window.addEventListener("appinstalled", () => {
-  installPrompt = undefined;
-  drawInstall();
-});
 const syncVisibility = () => {
   syncInterval(true);
   drawStopwatch();
@@ -719,7 +657,18 @@ document.addEventListener("pointerdown", () => {
   syncWake(true);
 });
 
+const pwa = setupPwa({
+  canReload: () => !timerRunning() && view !== "editor" && !(view === "settings" && settingsReturn === "editor"),
+  openInstallGuide: () => {
+    navigate("more");
+    byId("install-title").focus();
+    byId("install-title").scrollIntoView({ block: "nearest" });
+  },
+  installDismissed: read("localStorage", installKey).dismissed === true,
+  onDismissInstall: () => write("localStorage", installKey, { dismissed: true }),
+  announce,
+});
+
 drawSettings();
 drawLaps();
 setMode(mode, false);
-setupOffline();

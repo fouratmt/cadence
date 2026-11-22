@@ -98,6 +98,19 @@ h1:focus { outline: none; }
   border-bottom: 1px solid var(--border);
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-version {
+  color: var(--muted);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .brand {
   display: inline-flex;
   align-items: center;
@@ -147,10 +160,26 @@ h1:focus { outline: none; }
 .button-back .icon { margin-inline-start: -5px; }
 .button:active:not(:disabled) { transform: translateY(1px); }
 
+.pwa-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 7px;
+  padding: 4px 5px 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.pwa-notice-copy { flex: 1; min-width: 0; font-size: .875rem; }
+.pwa-notice-copy p { color: var(--muted); font-size: .8125rem; }
+.pwa-notice .button-icon { width: 44px; flex: 0 0 auto; color: var(--muted); }
+
 @media (hover: hover) {
   .button-quiet:hover:not(:disabled), .tab-bar a:hover { background: #30362e; }
   .button-primary:hover:not(:disabled) { background: #d3ff80; }
   .button-back:hover { color: var(--text); }
+  .pwa-notice .button-icon:hover { color: var(--text); background: var(--raised); }
 }
 
 main { padding-block: clamp(22px, 4vw, 48px) 0; }
@@ -390,6 +419,7 @@ dialog::backdrop { background: rgb(0 0 0 / .7); }
   .masthead-setting { width: 44px; padding-inline: 0; }
   .masthead-setting span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   main { padding-block-start: 20px; }
+  .pwa-notice:not([hidden]) ~ main { padding-block-start: 10px; }
   .page-heading { margin-block-end: 16px; }
   .console { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .phase-panel { min-height: clamp(242px, 43svh, 414px); }
@@ -432,6 +462,7 @@ dialog::backdrop { background: rgb(0 0 0 / .7); }
   .next-panel, .round-panel { padding: 9px; }
   .next-panel .label, .round-panel .label { font-size: .75rem; }
   .round-summary { gap: 4px; }
+  .pwa-notice-copy p { display: none; }
 }
 
 @media (max-width: 760px) and (orientation: portrait) {
@@ -475,6 +506,12 @@ dialog::backdrop { background: rgb(0 0 0 / .7); }
   }
   .phase-time.interval-time { --clock-height: 31svh; }
   .stopwatch-panel { min-height: 242px; }
+  .pwa-notice:not([hidden]) ~ .tab-bar {
+    position: static;
+    margin-block-start: 12px;
+    border-width: 1px;
+    border-radius: 10px;
+  }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {

@@ -38,6 +38,7 @@
     <symbol id="i-next" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4c6-4 8 4 14 0v10c-6 4-8-4-14 0"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></symbol>
@@ -47,14 +48,36 @@
 
   <div class="app-shell">
     <header class="masthead">
-      <a class="brand" href="#rounds" aria-label="Cadence home">
-        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-brand"/></svg></span>
-        <span>Cadence</span>
-      </a>
+      <div class="brand-lockup">
+        <a class="brand" href="#rounds" aria-label="Cadence home">
+          <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-brand"/></svg></span>
+          <span>Cadence</span>
+        </a>
+        <small class="app-version" id="app-version"></small>
+      </div>
       <button class="button button-quiet masthead-setting" type="button" data-action="settings">
         <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span>
       </button>
     </header>
+
+    <aside id="install-notice" class="pwa-notice" aria-labelledby="install-notice-title" hidden>
+      <strong class="pwa-notice-copy" id="install-notice-title">Install Cadence</strong>
+      <button id="install-notice-action" class="button button-primary" type="button" data-action="install">Show steps</button>
+      <button class="button button-icon" type="button" data-action="dismiss-install" aria-label="Dismiss install prompt">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </aside>
+
+    <aside id="update-notice" class="pwa-notice" aria-labelledby="update-notice-title" hidden>
+      <div class="pwa-notice-copy">
+        <strong id="update-notice-title">Update available</strong>
+        <p>Cadence will reload.</p>
+      </div>
+      <button id="update-button" class="button button-primary" type="button" data-action="update">Update</button>
+      <button class="button button-icon" type="button" data-action="dismiss-update" aria-label="Dismiss update prompt">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </aside>
 
     <main id="main">
       <section id="interval-view" aria-labelledby="interval-title">
@@ -141,7 +164,7 @@
           <ul class="preset-list" id="presets"></ul>
         </section>
         <section class="list-panel install-panel" aria-labelledby="install-title">
-          <div class="list-heading"><h2 id="install-title">Install app</h2><p class="app-status" id="offline-status">Preparing offline access</p></div>
+          <div class="list-heading"><h2 id="install-title" tabindex="-1">Install app</h2><p class="app-status" id="offline-status">Preparing offline access</p></div>
           <p id="install-steps"></p>
           <button class="button button-primary" type="button" data-action="install" id="install-button" hidden><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> Install Cadence</button>
         </section>

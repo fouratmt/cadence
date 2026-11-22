@@ -12,36 +12,38 @@ function setGlobal(t, name, value) {
   });
 }
 
-function installAudio(t) {
+function audioResponse(file) {
+  return { ok: true, arrayBuffer: async () => ({ file, duration: 1.2 }) };
+}
+
+function installAudio(t, fetchAudio = async (file) => audioResponse(file)) {
   const started = [];
   const stopped = [];
   const gains = [];
+  const requests = [];
 
-  function source(kind) {
-    const node = {
-      kind,
-      connect: (destination) => destination,
-      start: (when) => started.push({ node, when }),
-      stop: (when) => stopped.push({ node, when }),
-    };
-    return node;
-  }
+  setGlobal(t, "fetch", (file) => {
+    requests.push(file);
+    return fetchAudio(file);
+  });
 
   setGlobal(t, "AudioContext", class {
     state = "running";
     currentTime = 5;
 
-    createOscillator() {
-      return Object.assign(source("tone"), { frequency: {} });
-    }
-
     createBufferSource() {
-      return source("voice");
+      const node = {
+        playbackRate: {},
+        connect: (destination) => destination,
+        start: (when) => started.push({ node, when }),
+        stop: (when) => stopped.push({ node, when }),
+      };
+      return node;
     }
 
     createGain() {
       const gain = {
-        gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        gain: { setValueAtTime() {}, linearRampToValueAtTime() {} },
         connect() {},
       };
       gains.push(gain.gain);
@@ -52,82 +54,106 @@ function installAudio(t) {
       return buffer;
     }
   });
-  return { started, stopped, gains };
+  return { started, stopped, gains, requests };
 }
 
-test("plays phase tones and respects sound style and mute settings", async (t) => {
-  const { started } = installAudio(t);
+test("plays a rising work melody and a descending rest melody using recorded bells", async (t) => {
+  const { started, requests } = installAudio(t);
   const cues = new WorkoutCues();
-  cues.prepare(false);
+  cues.prepare(DEFAULT_SETTINGS);
 
-  await cues.play("work", { ...DEFAULT_SETTINGS, soundStyle: "pulse" });
-  assert.equal(started.length, 2);
-  assert.equal(started[0].node.type, "triangle");
-  assert.ok(started[1].when > started[0].when);
+  await cues.play("work", DEFAULT_SETTINGS);
+  assert.equal(started.length, 3);
+  assert.deepEqual(requests, ["./assets/bell-tubular.wav"]);
+  assert.ok(started.every(({ node }) => node.buffer.file === "./assets/bell-tubular.wav"));
+  assert.ok(started[0].when < started[1].when && started[1].when < started[2].when);
+  assert.ok(started[0].node.playbackRate.value < started[1].node.playbackRate.value);
+  assert.ok(started[1].node.playbackRate.value < started[2].node.playbackRate.value);
 
-  await cues.play("rest", { ...DEFAULT_SETTINGS, sound: false });
-  await cues.play("rest", { ...DEFAULT_SETTINGS, volume: 0 });
-  assert.equal(started.length, 2);
+  const setting = { ...DEFAULT_SETTINGS, soundStyle: "pulse" };
+  await cues.play("rest", setting);
+  const rest = started.slice(3);
+  assert.equal(rest.length, 2);
+  assert.ok(rest.every(({ node }) => node.buffer.file === "./assets/bell-hand.wav"));
+  assert.ok(rest[0].node.playbackRate.value > rest[1].node.playbackRate.value);
+  await cues.play("rest", { ...setting, sound: false });
+  await cues.play("rest", { ...setting, volume: 0 });
+  assert.equal(started.length, 5);
 });
 
-test("plays the bundled voice after the tone and applies the selected volume", async (t) => {
-  const { started, gains } = installAudio(t);
-  const requests = [];
-  const speech = new ArrayBuffer(8);
-  setGlobal(t, "fetch", async (url) => {
-    requests.push(url);
-    return { ok: true, arrayBuffer: async () => speech };
-  });
+test("plays the bundled voice after the bell phrase and applies the selected volume", async (t) => {
+  const { started, gains, requests, stopped } = installAudio(t);
   const cues = new WorkoutCues();
-  cues.prepare(true);
-  await cues.play("work", { ...DEFAULT_SETTINGS, voice: true, volume: 35 });
+  const settings = { ...DEFAULT_SETTINGS, voice: true, volume: 35 };
+  cues.prepare(settings);
+  await cues.play("work", settings);
 
-  assert.equal(requests.length, 5);
+  assert.equal(requests.length, 6);
   assert.ok(requests.includes("./assets/voice-work.wav"));
   const voice = started.at(-1);
-  assert.equal(voice.node.kind, "voice");
-  assert.equal(voice.node.buffer, speech);
-  assert.ok(voice.when > started[1].when);
+  assert.equal(voice.node.buffer.file, "./assets/voice-work.wav");
+  assert.ok(voice.when > started[2].when);
+  assert.equal(stopped.length, 3);
+  assert.ok(stopped.every(({ when }) => when <= voice.when + 1e-9));
   assert.equal(gains.at(-1).value, 0.35);
 });
 
-test("cancels an in-flight spoken cue when the workout is paused", async (t) => {
-  const { started, stopped } = installAudio(t);
+test("cancels scheduled bells and a voice that is still loading when the workout pauses", async (t) => {
   const loading = Promise.withResolvers();
-  setGlobal(t, "fetch", () => loading.promise);
+  const { started, stopped } = installAudio(t, async (file) =>
+    file.includes("/voice-") ? loading.promise : audioResponse(file));
   const cues = new WorkoutCues();
-  cues.prepare(true);
-  const playback = cues.play("work", { ...DEFAULT_SETTINGS, voice: true });
-  cues.stop();
-  loading.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
-  await playback;
+  const settings = { ...DEFAULT_SETTINGS, voice: true };
+  cues.prepare(settings);
+  const playback = cues.play("work", settings);
+  await new Promise(setImmediate);
+  assert.equal(started.length, 3);
 
-  assert.deepEqual(started.map(({ node }) => node.kind), ["tone", "tone"]);
-  assert.equal(stopped.filter(({ when }) => when === undefined).length, 2);
+  cues.stop();
+  loading.resolve(audioResponse("./assets/voice-work.wav"));
+  await playback;
+  assert.equal(started.length, 3);
+  assert.equal(stopped.filter(({ when }) => when === undefined).length, 3);
 });
 
-test("falls back to tones during a voice fetch failure and retries on the next preparation", async (t) => {
-  const { started } = installAudio(t);
-  let canFetch = false;
-  setGlobal(t, "fetch", async () => ({ ok: canFetch, arrayBuffer: async () => new ArrayBuffer(8) }));
+test("does not play a bell whose download completed after reset", async (t) => {
+  const loading = Promise.withResolvers();
+  const { started } = installAudio(t, () => loading.promise);
+  const cues = new WorkoutCues();
+  cues.prepare(DEFAULT_SETTINGS);
+  const playback = cues.play("work", DEFAULT_SETTINGS);
+  cues.stop();
+  loading.resolve(audioResponse("./assets/bell-tubular.wav"));
+  await playback;
+  assert.equal(started.length, 0);
+});
+
+test("keeps the bells when voice loading fails and retries the voice on the next preparation", async (t) => {
+  let canFetchVoice = false;
+  const { started } = installAudio(t, async (file) =>
+    !canFetchVoice && file.includes("/voice-") ? { ok: false } : audioResponse(file));
   const cues = new WorkoutCues();
   const settings = { ...DEFAULT_SETTINGS, voice: true };
 
-  cues.prepare(true);
+  cues.prepare(settings);
   await cues.play("prepare", settings);
-  assert.deepEqual(started.map(({ node }) => node.kind), ["tone"]);
+  assert.deepEqual(started.map(({ node }) => node.buffer.file), [
+    "./assets/bell-tubular.wav", "./assets/bell-tubular.wav",
+  ]);
 
-  canFetch = true;
-  cues.prepare(true);
-  await cues.play("work", { ...settings, sound: false });
-  assert.deepEqual(started.map(({ node }) => node.kind), ["tone", "voice"]);
+  canFetchVoice = true;
+  const voiceOnly = { ...settings, sound: false };
+  cues.prepare(voiceOnly);
+  await cues.play("work", voiceOnly);
+  assert.equal(started.at(-1).node.buffer.file, "./assets/voice-work.wav");
 });
 
 test("tolerates a browser without Web Audio", async (t) => {
   setGlobal(t, "AudioContext", undefined);
   const cues = new WorkoutCues();
-  cues.prepare(true);
-  await cues.play("work", { ...DEFAULT_SETTINGS, voice: true });
+  const settings = { ...DEFAULT_SETTINGS, voice: true };
+  cues.prepare(settings);
+  await cues.play("work", settings);
 });
 
 class FakeWakeLock extends EventTarget {

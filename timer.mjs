@@ -5,7 +5,7 @@ export const DEFAULT_TIMERS = {
 
 export const DEFAULT_SETTINGS = {
   sound: true,
-  soundStyle: "beep",
+  soundStyle: "bell",
   voice: false,
   flash: false,
   wake: true,

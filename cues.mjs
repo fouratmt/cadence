@@ -1,18 +1,31 @@
-const BEEPS = {
-  prepare: [520],
-  work: [760, 955],
-  rest: [455, 350],
-  cooldown: [525, 390],
-  finished: [620, 780, 930],
+// Each note gives its start in seconds, pitch in semitones, and relative level.
+const BELL_PHRASES = {
+  prepare: [[0, -5, .65], [.23, 0, .74]],
+  work: [[0, 0, .85], [.14, 4, .78], [.32, 7, 1]],
+  rest: [[0, 2, .78], [.22, -3, .74]],
+  cooldown: [[0, 4, .69], [.24, 2, .65], [.48, -5, .76]],
+  finished: [[0, -5, .75], [.17, 0, .83], [.35, 4, .79], [.56, 0, .35], [.56, 7, .94]],
 };
+
+// Keep the style IDs used in saved preferences.
+const BELL_STYLES = {
+  bell: { file: "bell-tubular", transpose: 5, gain: .52 },
+  beep: { file: "bell-hand", transpose: 0, gain: .72 },
+  pulse: { file: "bell-hand", transpose: -5, gain: .51 },
+};
+
+function bellStyle(name) {
+  return Object.hasOwn(BELL_STYLES, name) ? BELL_STYLES[name] : BELL_STYLES.bell;
+}
 
 export class WorkoutCues {
   #context;
-  #voice;
+  #buffers = new Map();
   #playing = new Set();
   #sequence = 0;
 
-  prepare(voice) {
+  prepare(settings) {
+    if ((!settings.sound && !settings.voice) || !settings.volume) return;
     try {
       this.#context ??= new AudioContext();
     } catch {
@@ -20,17 +33,23 @@ export class WorkoutCues {
     }
 
     if (this.#context.state !== "running") this.#context.resume().catch(() => {});
-    if (voice && !this.#voice) {
-      this.#voice = Promise.all(Object.keys(BEEPS).map(async (phase) => {
-        const response = await fetch(`./assets/voice-${phase}.wav`);
-        if (!response.ok) throw new Error("Voice asset unavailable");
-        const buffer = await this.#context.decodeAudioData(await response.arrayBuffer());
-        return [phase, buffer];
-      })).then(Object.fromEntries).catch(() => {
-        this.#voice = undefined;
-        return {};
-      });
+    if (settings.sound) this.#load(bellStyle(settings.soundStyle).file);
+    if (settings.voice) {
+      for (const phase of Object.keys(BELL_PHRASES)) this.#load(`voice-${phase}`);
     }
+  }
+
+  #load(file) {
+    if (!this.#buffers.has(file)) {
+      const loading = fetch(`./assets/${file}.wav`).then(async (response) => {
+        if (!response.ok) throw new Error(`Audio asset unavailable: ${file}`);
+        return this.#context.decodeAudioData(await response.arrayBuffer());
+      }).catch(() => {
+        this.#buffers.delete(file);
+      });
+      this.#buffers.set(file, loading);
+    }
+    return this.#buffers.get(file);
   }
 
   stop() {
@@ -39,10 +58,23 @@ export class WorkoutCues {
     this.#playing.clear();
   }
 
-  #start(source, start) {
+  #start(buffer, start, volume, rate = 1, ring = Infinity) {
+    const context = this.#context;
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    const shortened = ring < buffer.duration / rate;
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    gain.gain.value = volume;
+    if (shortened) {
+      gain.gain.setValueAtTime(volume, start + Math.max(0, ring - .14));
+      gain.gain.linearRampToValueAtTime(0, start + ring);
+    }
+    source.connect(gain).connect(context.destination);
     this.#playing.add(source);
     source.onended = () => this.#playing.delete(source);
     source.start(start);
+    if (shortened) source.stop(start + ring);
   }
 
   async play(phase, settings) {
@@ -56,39 +88,27 @@ export class WorkoutCues {
 
     const context = this.#context;
     const volume = settings.volume / 100;
-    const notes = BEEPS[phase];
-    const bell = settings.soundStyle === "bell";
-    const pulse = settings.soundStyle === "pulse";
-    const spacing = bell ? .19 : .135;
-    const duration = bell ? .34 : .13;
+    const style = bellStyle(settings.soundStyle);
+    const voice = settings.voice ? this.#load(`voice-${phase}`) : undefined;
+    const bell = settings.sound ? await this.#load(style.file) : undefined;
+    if (sequence !== this.#sequence || context.state !== "running") return;
 
-    if (settings.sound) {
-      notes.forEach((note, index) => {
-        const start = context.currentTime + index * spacing;
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-
-        oscillator.frequency.value = note * (bell ? 1.42 : pulse ? .72 : 1);
-        oscillator.type = pulse ? "triangle" : "sine";
-        gain.gain.setValueAtTime(.001, start);
-        gain.gain.exponentialRampToValueAtTime(volume * .28, start + .015);
-        gain.gain.exponentialRampToValueAtTime(.001, start + duration);
-        oscillator.connect(gain).connect(context.destination);
-        this.#start(oscillator, start);
-        oscillator.stop(start + duration);
-      });
+    let speechStart = context.currentTime;
+    if (bell) {
+      const start = context.currentTime;
+      const notes = BELL_PHRASES[phase];
+      const speechOffset = notes.at(-1)[0] + .32;
+      for (const [offset, pitch, level] of notes) {
+        const rate = 2 ** ((pitch + style.transpose) / 12);
+        const ring = voice ? speechOffset - offset : Infinity;
+        this.#start(bell, start + offset, volume * style.gain * level, rate, ring);
+      }
+      speechStart = start + speechOffset;
     }
 
-    if (settings.voice) {
-      const speech = await this.#voice;
-      if (sequence !== this.#sequence || context.state !== "running" || !speech?.[phase]) return;
-      const start = context.currentTime + (settings.sound ? (notes.length - 1) * spacing + duration : 0);
-      const source = context.createBufferSource();
-      const gain = context.createGain();
-      source.buffer = speech[phase];
-      gain.gain.value = volume;
-      source.connect(gain).connect(context.destination);
-      this.#start(source, start);
+    const speech = await voice;
+    if (speech && sequence === this.#sequence && context.state === "running") {
+      this.#start(speech, Math.max(speechStart, context.currentTime), volume);
     }
   }
 }

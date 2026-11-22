@@ -57,7 +57,7 @@ On the first visit over HTTPS, Cadence offers installation. The install action o
 - Start, pause, resume, skip, reset, and automatic phase changes. The countdown recalculates from elapsed time after a browser interruption. Session state survives a reload in the same tab or app window.
 - Stopwatch with elapsed time, individual lap splits, and cumulative lap times.
 - Create, edit, copy, delete, and load named timers in **More**. Presets and settings are stored on the device.
-- Three beep styles, optional bundled English spoken cues, a cue volume slider and preview, and an optional in-app screen flash. The flash respects reduced-motion settings.
+- Distinct bell melodies for prepare, work, rest, cooldown, and finish. Choose tubular bells, hand chimes, or soft chimes in **Settings**, adjust the volume, or tap **Preview**. Bundled English spoken cues and a screen flash are optional. The flash respects reduced-motion settings.
 - Screen Wake Lock during running timers, requested again when you return. If the browser denies it, the app displays a message. A manually locked or suspended device can miss cues even though the timer catches up on return. [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) · [Chrome Page Lifecycle](https://developer.chrome.com/docs/web-platform/page-lifecycle-api)
 - Standalone install manifest and offline caching for the app, font, icons, and voice cues. On devices where the installed app uses a separate storage container, add your presets in the app window you plan to use.
 - First-visit install prompt, optional updates after a new version downloads, and the served version beside the Cadence name.
@@ -78,5 +78,7 @@ On the first visit over HTTPS, Cadence offers installation. The install action o
 - Physical-device verification for install flows, low-power wake lock behavior, and cue playback on iOS and Android.
 
 Barlow Condensed and the Bebas Neue countdown digits are bundled under the SIL Open Font License. [Barlow Condensed license](./assets/OFL-Barlow.txt) · [Bebas Neue license](./assets/OFL-Bebas-Neue.txt)
+
+The bell melodies use real hand chime and tubular bell recordings from the Versilian Community Sample Library, released under CC0. The samples are trimmed and bundled for offline use. [Versilian Studios](https://versilian-studios.com/vcsl/) · [Hand chime recording](https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Hand%20Chimes/sus_A4_r01_main.wav) · [Tubular bell recording](https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Tubular%20Bells%201/chimes_E4_pp_rr3.wav)
 
 The short English cues were generated using meSpeak and are bundled as audio files. [meSpeak](https://www.masswerk.at/mespeak/)

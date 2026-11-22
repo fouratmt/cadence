@@ -132,6 +132,7 @@ test("precaches all shipped UI, font, icon and voice assets with unique scoped U
   const css = await readFile(new URL("styles.css", root), "utf8");
   const references = [
     "./index.html", "./timer.mjs", "./cues.mjs", "./pwa.mjs", "./version.js",
+    "./assets/bell-hand.wav", "./assets/bell-tubular.wav",
     ...Array.from(html.matchAll(/(?:href|src)="(\.\/[^"]+)"/g), (match) => match[1]),
     ...Array.from(css.matchAll(/url\("\.\/([^"]+)"\)/g), (match) => `./${match[1]}`),
     ...manifest.icons.map((icon) => icon.src),

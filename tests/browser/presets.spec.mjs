@@ -73,7 +73,7 @@ test("restores preferences and uses the chosen time format and colors", async ({
   await page.getByRole("switch", { name: /Screen flash/ }).check();
   await page.getByRole("switch", { name: /Muted phase colors/ }).check();
   await page.getByLabel("Time format").selectOption("compact");
-  await page.getByLabel("Sound style").selectOption("bell");
+  await page.getByLabel("Sound style").selectOption("Hand chimes");
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.locator("#phase-time")).toHaveText("0:20");
   await expect(page.locator("body")).toHaveClass("pale");
@@ -84,7 +84,7 @@ test("restores preferences and uses the chosen time format and colors", async ({
     await expect(page.getByRole("switch", { name })).toBeChecked();
   }
   await expect(page.getByLabel("Time format")).toHaveValue("compact");
-  await expect(page.getByLabel("Sound style")).toHaveValue("bell");
+  await expect(page.getByLabel("Sound style")).toHaveValue("beep");
 });
 
 test("migrates existing presets, preferences, and a paused workout to Cadence", async ({ page }) => {

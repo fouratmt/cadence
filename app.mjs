@@ -265,7 +265,7 @@ function toggleInterval() {
     interval.startedAt = null;
     cues.stop();
   } else if (interval?.mode === mode && activeInterval()) {
-    cues.prepare(settings.voice);
+    cues.prepare(settings);
     interval.startedAt = now;
   } else {
     const preset = selectedPreset(mode);
@@ -274,7 +274,7 @@ function toggleInterval() {
       mode, config, timeline: buildTimeline(config), name: preset?.name ?? modeNames[mode],
       elapsed: 0, startedAt: now,
     };
-    cues.prepare(settings.voice);
+    cues.prepare(settings);
     lastIndex = -1;
   }
 
@@ -573,9 +573,9 @@ function changeSetting(event) {
   const { name, value, type, checked } = event.target;
   if (!Object.hasOwn(DEFAULT_SETTINGS, name)) return;
   settings[name] = type === "checkbox" ? checked : type === "range" ? Number(value) : value;
-  if (["voice", "sound", "volume"].includes(name)) {
+  if (["voice", "sound", "soundStyle", "volume"].includes(name)) {
     cues.stop();
-    if (settings.voice) cues.prepare(true);
+    cues.prepare(settings);
   }
   drawSettings();
   drawLaps();
@@ -608,7 +608,7 @@ const actions = {
   "dismiss-install": () => pwa.dismissInstall(),
   update: () => pwa.applyUpdate(),
   "dismiss-update": () => pwa.dismissUpdate(),
-  "preview-cues": () => { cues.prepare(settings.voice); cues.play("work", settings); },
+  "preview-cues": () => { cues.prepare(settings); cues.play("work", settings); },
   "load-default": (button) => loadPreset({ mode: button.dataset.defaultMode }),
   "open-preset": loadPreset,
   "edit-preset": (preset) => openEditor("preset", preset),
@@ -653,7 +653,7 @@ const syncVisibility = () => {
 document.addEventListener("visibilitychange", syncVisibility);
 window.addEventListener("pageshow", syncVisibility);
 document.addEventListener("pointerdown", () => {
-  if (interval?.startedAt != null && (settings.sound || settings.voice)) cues.prepare(settings.voice);
+  if (interval?.startedAt != null) cues.prepare(settings);
   syncWake(true);
 });
 

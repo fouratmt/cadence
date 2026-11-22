@@ -5,6 +5,14 @@ import "../../version.js";
 const version = globalThis.CADENCE_VERSION;
 
 test("reloads a subpath with the server stopped and runs an offline workout", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.playedAudio = [];
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      if (this.buffer) window.playedAudio.push(this.buffer.duration);
+      return start.apply(this, args);
+    };
+  });
   const site = await startSite();
   try {
     const url = new URL("?preview=1#more", site.url);
@@ -24,19 +32,24 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
         "./assets/icon-192.png",
         "./assets/bebas-neue-digits.woff2",
         "./assets/voice-work.wav",
+        "./assets/bell-hand.wav",
+        "./assets/bell-tubular.wav",
       ];
       return Promise.all(paths.map(async (path) => {
         const response = await fetch(path);
         return response.ok && (await response.arrayBuffer()).byteLength > 0;
       }));
     });
-    expect(assets).toEqual([true, true, true, true]);
-    const speechDuration = await page.evaluate(async () => {
-      const response = await fetch("./assets/voice-work.wav");
+    expect(assets).toEqual([true, true, true, true, true, true]);
+    const durations = await page.evaluate(async () => {
       const audio = new OfflineAudioContext(1, 1, 44_100);
-      return (await audio.decodeAudioData(await response.arrayBuffer())).duration;
+      const files = ["voice-work", "bell-hand", "bell-tubular"];
+      return Promise.all(files.map(async (file) => {
+        const response = await fetch(`./assets/${file}.wav`);
+        return (await audio.decodeAudioData(await response.arrayBuffer())).duration;
+      }));
     });
-    expect(speechDuration).toBeGreaterThan(0);
+    expect(durations.every((duration) => duration > 0)).toBe(true);
 
     const button = (name) => page.getByRole("button", { name, exact: true });
     await button("New timer").click();
@@ -45,6 +58,7 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
     await page.getByRole("button", { name: /^Offline practice Rounds/ }).click();
     await expect(page.getByRole("heading", { name: "Offline practice" })).toBeVisible();
     await button("Start").click();
+    await expect.poll(() => page.evaluate(() => window.playedAudio.length)).toBe(3);
     await button("Skip interval").click();
     await expect(page.locator("#phase-name")).toHaveText("Rest");
     await button("Pause").click();
@@ -54,6 +68,46 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
     await expect(page.getByRole("heading", { name: "Offline practice" })).toBeVisible();
   } finally {
     await site.close();
+  }
+});
+
+test("each bell phrase starts promptly and stays below clipping at full volume", async ({ page }) => {
+  await page.goto("./");
+  const mixes = await page.evaluate(async () => {
+    const { WorkoutCues } = await import("./cues.mjs");
+    const { DEFAULT_SETTINGS, PHASE_NAMES } = await import("./timer.mjs");
+    const sampleRate = 44_100;
+    let audio;
+    window.AudioContext = class {
+      constructor() {
+        audio = new OfflineAudioContext(1, sampleRate * 2, sampleRate);
+        Object.defineProperty(audio, "state", { value: "running" });
+        return audio;
+      }
+    };
+
+    const results = [];
+    for (const soundStyle of ["bell", "beep", "pulse"]) {
+      for (const phase of Object.keys(PHASE_NAMES)) {
+        const cues = new WorkoutCues();
+        const settings = { ...DEFAULT_SETTINGS, volume: 100, soundStyle };
+        cues.prepare(settings);
+        await cues.play(phase, settings);
+        const samples = (await audio.startRendering()).getChannelData(0);
+        const peak = samples.reduce((max, sample) => Math.max(max, Math.abs(sample)), 0);
+        const firstNote = samples.findIndex((sample) => Math.abs(sample) > .01);
+        results.push({ phase, soundStyle, peak, firstNote, sampleRate });
+      }
+    }
+    return results;
+  });
+
+  expect(mixes).toHaveLength(15);
+  for (const { phase, soundStyle, peak, firstNote, sampleRate } of mixes) {
+    const cue = `${soundStyle} ${phase}`;
+    expect(peak, cue).toBeGreaterThan(.05);
+    expect(peak, cue).toBeLessThan(.92);
+    expect(firstNote / sampleRate, cue).toBeLessThan(.06);
   }
 });
 

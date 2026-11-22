@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121413">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="An offline workout timer for rounds, Tabata and stopwatch laps.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Sports Timer</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./assets/icon-180.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <!-- A high-contrast interval console with large phase-colored time, a clear preview of the next interval, and thumb-friendly workout controls. -->
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-brand" viewBox="0 0 24 24">
+      <path fill="currentColor" stroke="none" d="M3 18h4l4-12H7Zm7 0h4l4-12h-4Zm7 0h4l2-6h-4Z"/>
+    </symbol>
+    <symbol id="i-rounds" viewBox="0 0 24 24"><path d="M20 8A8 8 0 1 0 20 16M20 4v4h-4M20 20v-4h-4"/></symbol>
+    <symbol id="i-tabata" viewBox="0 0 24 24"><path d="m13 2-8 12h6l-1 8 9-12h-6l1-8Z"/></symbol>
+    <symbol id="i-stopwatch" viewBox="0 0 24 24"><circle cx="12" cy="14" r="7"/><path d="M10 2h4m-2 0v5m5 1 2-2m-7 4v4l2 1"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path class="icon-knob" d="M8 4v4m8 2v4m-6 2v4"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m15 5 4 4m-2-6 4 4-12 12-5 1 1-5Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 4.8v14.4L20 12Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 2.3 6.6M4 5v6h6"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M5 5v14l11-7Zm13 0h2v14h-2z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4c6-4 8 4 14 0v10c-6 4-8-4-14 0"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></symbol>
+    <symbol id="i-screen" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M11 17h2"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4Zm12 0a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <header class="masthead">
+      <a class="brand" href="#rounds" aria-label="Sports Timer home">
+        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-brand"/></svg></span>
+        <span>Sports Timer</span>
+      </a>
+      <button class="button button-quiet masthead-setting" type="button" data-action="settings">
+        <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span>
+      </button>
+    </header>
+
+    <main id="main">
+      <section id="interval-view" aria-labelledby="interval-title">
+        <div class="page-heading">
+          <div>
+            <h1 id="interval-title" tabindex="-1">Rounds</h1>
+            <p class="heading-detail"><span id="workout-total">09:20</span> <span id="workout-total-label">total</span></p>
+          </div>
+          <button class="button button-quiet" type="button" data-action="edit-timer" id="edit-timer">
+            <svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg><span>Edit timer</span>
+          </button>
+        </div>
+        <div id="active-workout" class="notice" hidden>
+          <p>A workout is already in progress.</p>
+          <button class="button button-quiet" type="button" data-action="return-workout">Return to workout</button>
+        </div>
+        <div class="console">
+          <div id="phase-panel" class="phase-panel" data-phase="work">
+            <div class="phase-header">
+              <p id="phase-name" class="phase-name" aria-live="polite">Work</p>
+              <span id="phase-status" class="phase-status">Ready</span>
+            </div>
+            <div id="phase-time" class="phase-time" role="timer">01:00</div>
+            <div class="phase-track" aria-hidden="true"><span id="phase-fill"></span></div>
+          </div>
+          <div class="console-rail">
+            <div id="next-panel" class="next-panel" data-phase="rest">
+              <div><p class="label">Up next</p><p id="next-name" class="next-name">Rest</p></div>
+              <span id="next-time" class="next-time">00:10</span>
+            </div>
+            <div class="round-panel">
+              <div class="round-summary">
+                <p class="label" id="round-label">Round</p>
+                <p class="round-count"><span id="round-current">01</span><span class="round-divider">/</span><span id="round-total">08</span></p>
+              </div>
+              <div id="round-track" class="round-track" aria-hidden="true"></div>
+            </div>
+            <div class="console-actions">
+              <button id="interval-main" class="button button-primary" type="button" data-action="interval-main">
+                <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Start</span>
+              </button>
+              <button id="interval-skip" class="button button-quiet button-icon" type="button" data-action="interval-skip" aria-label="Skip interval" title="Skip interval" disabled>
+                <svg class="icon" aria-hidden="true"><use href="#i-skip"/></svg>
+              </button>
+              <button id="interval-reset" class="button button-quiet button-icon" type="button" data-action="interval-reset" aria-label="Reset timer" title="Reset timer" disabled>
+                <svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="stopwatch-view" aria-labelledby="stopwatch-title" hidden>
+        <div class="page-heading">
+          <div><h1 id="stopwatch-title" tabindex="-1">Stopwatch</h1><p class="heading-detail">Elapsed time and laps</p></div>
+        </div>
+        <div class="console stopwatch-console">
+          <div class="phase-panel stopwatch-panel" data-phase="stopwatch">
+            <div class="phase-header"><p class="phase-name">Elapsed</p><span class="phase-status" id="stopwatch-status">Ready</span></div>
+            <div class="phase-time" role="timer"><span id="stopwatch-time">00:00</span><span id="stopwatch-fraction" class="fraction">.00</span></div>
+            <div class="console-actions stopwatch-actions">
+              <button id="stopwatch-main" class="button button-primary" type="button" data-action="stopwatch-main"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Start</span></button>
+              <button id="stopwatch-lap" class="button button-quiet" type="button" data-action="stopwatch-lap" disabled><svg class="icon" aria-hidden="true"><use href="#i-flag"/></svg><span>Lap</span></button>
+              <button id="stopwatch-reset" class="button button-quiet button-icon" type="button" data-action="stopwatch-reset" aria-label="Reset stopwatch" title="Reset stopwatch" disabled><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
+            </div>
+          </div>
+          <div class="laps-panel">
+            <h2>Laps</h2>
+            <p class="muted" id="laps-empty">Tap Lap while the stopwatch is running.</p>
+            <div id="laps-table-wrap" class="laps-table-wrap" hidden>
+              <table><thead><tr><th scope="col">Lap</th><th scope="col">Split</th><th scope="col">Total</th></tr></thead><tbody id="laps"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="more-view" class="content-view" aria-labelledby="more-title" hidden>
+        <div class="page-heading">
+          <div><h1 id="more-title" tabindex="-1">More</h1></div>
+        </div>
+        <section class="list-panel" aria-labelledby="presets-title">
+          <div class="list-heading"><h2 id="presets-title">Saved timers</h2><button class="button button-primary" type="button" data-action="new-timer"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> New timer</button></div>
+          <p id="presets-empty" class="empty-message">Save your interval timings as a named timer for your next workout.</p>
+          <ul class="preset-list" id="presets"></ul>
+        </section>
+        <section class="list-panel install-panel" aria-labelledby="install-title">
+          <div class="list-heading"><h2 id="install-title">Install app</h2><p class="app-status" id="offline-status">Preparing offline access</p></div>
+          <p id="install-steps"></p>
+          <button class="button button-primary" type="button" data-action="install" id="install-button" hidden><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> Install Sports Timer</button>
+        </section>
+      </section>
+
+      <section id="editor-view" class="content-view" aria-labelledby="editor-title" hidden>
+        <button class="button button-back" type="button" data-action="close-editor"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg> Back</button>
+        <div class="page-heading">
+          <div><h1 id="editor-title" tabindex="-1">Edit timer</h1><p class="heading-detail"><span id="editor-total">09:20</span> total</p></div>
+        </div>
+        <form id="timer-form">
+          <div id="preset-fields" class="list-panel form-info" hidden>
+            <label for="preset-name">Timer name</label>
+            <input id="preset-name" type="text" maxlength="48" placeholder="e.g. Boxing practice" autocomplete="off">
+            <label for="preset-mode" id="preset-mode-label">Mode</label>
+            <select id="preset-mode"><option value="rounds">Rounds</option><option value="tabata">Tabata</option></select>
+          </div>
+          <div class="list-panel duration-list" id="duration-list"></div>
+          <div class="form-actions">
+            <button class="button button-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg> Save timer</button>
+            <button class="button button-quiet" type="button" data-action="save-as"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Save as new timer</button>
+          </div>
+          <p class="form-note" id="editor-note" hidden></p>
+        </form>
+      </section>
+
+      <section id="settings-view" class="content-view" aria-labelledby="settings-title" hidden>
+        <button class="button button-back" type="button" data-action="close-settings"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg> Back</button>
+        <div class="page-heading"><div><h1 id="settings-title" tabindex="-1">Settings</h1></div></div>
+        <form id="settings-form">
+          <section class="list-panel settings-panel" aria-labelledby="cues-title">
+            <div class="list-heading"><h2 id="cues-title">Workout cues</h2></div>
+            <label class="setting-row" for="sound"><span><strong>Interval sounds</strong><small>Play a tone when the phase changes.</small></span><input class="switch" id="sound" name="sound" type="checkbox" role="switch"></label>
+            <label class="setting-row" for="sound-style"><span><strong>Sound style</strong></span><select id="sound-style" name="soundStyle"><option value="beep">Beep</option><option value="bell">Bell</option><option value="pulse">Pulse</option></select></label>
+            <div class="setting-row volume-row">
+              <label for="volume"><strong>Volume</strong><output id="volume-value" for="volume">65%</output></label>
+              <input id="volume" name="volume" type="range" min="0" max="100" step="5">
+              <button class="button button-quiet" type="button" data-action="preview-cues"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg> Preview</button>
+            </div>
+            <label class="setting-row" for="voice"><span><strong>Spoken cues</strong><small>Announce each phase and the end of the workout.</small></span><input class="switch" id="voice" name="voice" type="checkbox" role="switch"></label>
+            <label class="setting-row" for="flash"><span><strong>Screen flash</strong><small>Briefly highlight the timer when the phase changes.</small></span><input class="switch" id="flash" name="flash" type="checkbox" role="switch"></label>
+          </section>
+          <section class="list-panel settings-panel" aria-labelledby="display-title">
+            <div class="list-heading"><h2 id="display-title">Display</h2></div>
+            <label class="setting-row" for="wake"><span><strong>Keep screen awake</strong><small>Prevents auto-lock during an active timer when supported.</small></span><input class="switch" id="wake" name="wake" type="checkbox" role="switch"></label>
+            <label class="setting-row" for="pale"><span><strong>Muted phase colors</strong><small>Soften the bright workout colors.</small></span><input class="switch" id="pale" name="pale" type="checkbox" role="switch"></label>
+            <label class="setting-row" for="time-format"><span><strong>Time format</strong></span><select id="time-format" name="timeFormat"><option value="padded">00:00</option><option value="compact">0:00</option></select></label>
+          </section>
+        </form>
+      </section>
+
+      <p id="wake-status" class="wake-status" hidden><svg class="icon" aria-hidden="true"><use href="#i-screen"/></svg><span></span></p>
+      <p id="announcement" class="visually-hidden" role="status"></p>
+      <noscript>Enable JavaScript to use Sports Timer.</noscript>
+    </main>
+
+    <nav class="tab-bar" aria-label="Timer modes">
+      <a href="#rounds" data-mode="rounds" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-rounds"/></svg><span>Rounds</span></a>
+      <a href="#tabata" data-mode="tabata"><svg class="icon" aria-hidden="true"><use href="#i-tabata"/></svg><span>Tabata</span></a>
+      <a href="#stopwatch" data-mode="stopwatch"><svg class="icon" aria-hidden="true"><use href="#i-stopwatch"/></svg><span>Stopwatch</span></a>
+      <a href="#more" data-mode="more"><svg class="icon" aria-hidden="true"><use href="#i-more"/></svg><span>More</span></a>
+    </nav>
+  </div>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-title">
+    <form method="dialog">
+      <h2 id="delete-title">Delete timer?</h2>
+      <p id="delete-description"></p>
+      <div class="form-actions"><button class="button button-quiet" value="cancel" autofocus>Cancel</button><button class="button button-danger" value="delete">Delete timer</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

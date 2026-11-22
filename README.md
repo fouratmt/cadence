@@ -52,12 +52,13 @@ On the first visit over HTTPS, Cadence offers installation. The install action o
 
 ### Implemented
 
-- Rounds and Tabata with editable preparation, work, rest, round count, and cooldown. Rest runs between work rounds and cooldown follows the last round. The default Tabata takes four minutes.
+- Rounds and Tabata with editable preparation, work, rest, round count, and cooldown. Tabata adds a cycle count and a recovery interval between cycles. The default Tabata has three cycles of eight rounds and takes 18 minutes and 50 seconds.
 - Edge-to-edge interval countdown on phones in portrait, with tall, condensed digits and a larger next-phase preview.
+- Rounds, Tabata, and Stopwatch fit between the pinned Cadence header and mode bar. Settings, the timer editor, and lap history can scroll independently.
 - Start, pause, resume, skip, reset, and automatic phase changes. The countdown recalculates from elapsed time after a browser interruption. Session state survives a reload in the same tab or app window.
-- Stopwatch with elapsed time, individual lap splits, and cumulative lap times.
+- Stopwatch with an adjustable preparation countdown and recurring lap bells. Both can be set to zero. Use **Lap** to record individual splits and cumulative times.
 - Create, edit, copy, delete, and load named timers in **More**. Presets and settings are stored on the device.
-- Distinct bell melodies for prepare, work, rest, cooldown, and finish. Choose tubular bells, hand chimes, or soft chimes in **Settings**, adjust the volume, or tap **Preview**. Bundled English spoken cues and a screen flash are optional. The flash respects reduced-motion settings.
+- Short bips at 3, 2, and 1 seconds, followed by a bell melody at the phase change. Choose tubular bells, hand chimes, or soft chimes in **Settings**, adjust the volume, or tap **Preview**. Bundled English spoken cues and a screen flash are optional. The flash respects reduced-motion settings.
 - Screen Wake Lock during running timers, requested again when you return. If the browser denies it, the app displays a message. A manually locked or suspended device can miss cues even though the timer catches up on return. [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) · [Chrome Page Lifecycle](https://developer.chrome.com/docs/web-platform/page-lifecycle-api)
 - Standalone install manifest and offline caching for the app, font, icons, and voice cues. On devices where the installed app uses a separate storage container, add your presets in the app window you plan to use.
 - First-visit install prompt, optional updates after a new version downloads, and the served version beside the Cadence name.
@@ -67,11 +68,13 @@ On the first visit over HTTPS, Cadence offers installation. The install action o
 - Chromium, Firefox, and WebKit completed an interval workout, recorded stopwatch laps, and edited, loaded, and deleted a saved timer. All three reloaded at a repository subpath after the local server stopped.
 - Chromium passed the manifest checks and automated accessibility scans for the workout, editor, and settings. The countdown fits at desktop, mobile, compact mobile, and landscape viewport sizes.
 - A simulated interruption verified that the countdown catches up and requests a new wake lock on return. The browser test also verified that a bundled voice clip decoded and started playing.
+- Chromium, Firefox, and WebKit verified the timing of all three bips before the bell, including a pause and resume during the countdown.
+- Browser tests cover Tabata recovery and cycle progression, plus Stopwatch preparation, timed lap bells, and saved Stopwatch presets.
 
 ### Planned or to investigate
 
 - Exercise names or spoken labels, and device-local voice selection for additional languages.
-- Final-seconds ticking and vibration where supported.
+- Vibration cues where supported.
 - Camera torch as a foreground cue where hardware and permissions allow.
 - Orientation lock where supported. The current layout works in portrait and landscape.
 - Evaluate the Audio Session API for OS-managed music ducking on browsers that support it. [Audio Session API](https://developer.mozilla.org/en-US/docs/Web/API/AudioSession/type)

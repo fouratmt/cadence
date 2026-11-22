@@ -58,6 +58,12 @@ export class WorkoutCues {
     this.#playing.clear();
   }
 
+  #schedule(source, start) {
+    this.#playing.add(source);
+    source.onended = () => this.#playing.delete(source);
+    source.start(start);
+  }
+
   #start(buffer, start, volume, rate = 1, ring = Infinity) {
     const context = this.#context;
     const source = context.createBufferSource();
@@ -71,10 +77,28 @@ export class WorkoutCues {
       gain.gain.linearRampToValueAtTime(0, start + ring);
     }
     source.connect(gain).connect(context.destination);
-    this.#playing.add(source);
-    source.onended = () => this.#playing.delete(source);
-    source.start(start);
+    this.#schedule(source, start);
     if (shortened) source.stop(start + ring);
+  }
+
+  async countdown(settings) {
+    const context = this.#context;
+    if (!settings.sound || !settings.volume || !context) return;
+    const sequence = this.#sequence;
+    if (context.state !== "running") await context.resume().catch(() => {});
+    if (sequence !== this.#sequence || context.state !== "running") return;
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const start = context.currentTime;
+    const end = start + .09;
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(settings.volume / 100 * .22, start + .005);
+    gain.gain.linearRampToValueAtTime(0, end);
+    oscillator.connect(gain).connect(context.destination);
+    this.#schedule(oscillator, start);
+    oscillator.stop(end);
   }
 
   async play(phase, settings) {
@@ -89,14 +113,15 @@ export class WorkoutCues {
     const context = this.#context;
     const volume = settings.volume / 100;
     const style = bellStyle(settings.soundStyle);
-    const voice = settings.voice ? this.#load(`voice-${phase}`) : undefined;
+    const cue = phase === "cycleRest" ? "rest" : phase;
+    const voice = settings.voice ? this.#load(`voice-${cue}`) : undefined;
     const bell = settings.sound ? await this.#load(style.file) : undefined;
     if (sequence !== this.#sequence || context.state !== "running") return;
 
     let speechStart = context.currentTime;
     if (bell) {
       const start = context.currentTime;
-      const notes = BELL_PHRASES[phase];
+      const notes = BELL_PHRASES[cue];
       const speechOffset = notes.at(-1)[0] + .32;
       for (const [offset, pitch, level] of notes) {
         const rate = 2 ** ((pitch + style.transpose) / 12);

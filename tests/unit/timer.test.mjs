@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  buildTimeline, DEFAULT_TIMERS, elapsedTime, formatTime, stopwatchValue, validTimer, workoutFrame,
+  buildTimeline, DEFAULT_TIMERS, elapsedTime, formatTime, stopwatchFrame, stopwatchValue, validTimer, workoutFrame,
 } from "../../timer.mjs";
 
 const config = { prepare: 2, work: 3, rest: 2, rounds: 2, cooldown: 1 };
@@ -23,29 +23,46 @@ test("rejects incomplete timers, invalid rounds and durations outside the editor
   }
 });
 
-test("keeps the advertised defaults at 9:20 for Rounds and 4:00 for Tabata", () => {
+test("keeps the advertised defaults at 9:20 for Rounds and 18:50 for Tabata", () => {
   assert.equal(buildTimeline(DEFAULT_TIMERS.rounds).total, 560_000);
-  assert.equal(buildTimeline(DEFAULT_TIMERS.tabata).total, 240_000);
+  assert.equal(buildTimeline(DEFAULT_TIMERS.tabata).total, 1_130_000);
 });
 
 test("builds contiguous phases with rest between work rounds only", () => {
   assert.deepEqual(buildTimeline(config), {
     phases: [
-      { kind: "prepare", round: 0, start: 0, end: 2000 },
-      { kind: "work", round: 1, start: 2000, end: 5000 },
-      { kind: "rest", round: 1, start: 5000, end: 7000 },
-      { kind: "work", round: 2, start: 7000, end: 10_000 },
-      { kind: "cooldown", round: 2, start: 10_000, end: 11_000 },
+      { kind: "prepare", cycle: 1, round: 0, start: 0, end: 2000 },
+      { kind: "work", cycle: 1, round: 1, start: 2000, end: 5000 },
+      { kind: "rest", cycle: 1, round: 1, start: 5000, end: 7000 },
+      { kind: "work", cycle: 1, round: 2, start: 7000, end: 10_000 },
+      { kind: "cooldown", cycle: 1, round: 2, start: 10_000, end: 11_000 },
     ],
     total: 11_000,
     rounds: 2,
+    cycles: 1,
   });
 });
 
 test("omits optional phases set to zero, including a one-round workout", () => {
   const { phases, total } = buildTimeline({ prepare: 0, work: 1, rest: 0, rounds: 1, cooldown: 0 });
-  assert.deepEqual(phases, [{ kind: "work", round: 1, start: 0, end: 1000 }]);
+  assert.deepEqual(phases, [{ kind: "work", cycle: 1, round: 1, start: 0, end: 1000 }]);
   assert.equal(total, 1000);
+});
+
+test("repeats Tabata rounds with recovery between cycles and cooldown at the end", () => {
+  const multiCycle = { ...config, cycles: 2, cycleRest: 4 };
+  assert.ok(validTimer(multiCycle, "tabata"));
+  assert.ok(!validTimer({ ...multiCycle, cycles: 0 }, "tabata"));
+  assert.ok(!validTimer({ ...multiCycle, cycleRest: -1 }, "tabata"));
+  const timeline = buildTimeline(multiCycle);
+  assert.equal(timeline.total, 23_000);
+  assert.deepEqual(timeline.phases.map(({ kind, cycle }) => [kind, cycle]), [
+    ["prepare", 1], ["work", 1], ["rest", 1], ["work", 1], ["cycleRest", 1],
+    ["work", 2], ["rest", 2], ["work", 2], ["cooldown", 2],
+  ]);
+  assert.equal(workoutFrame(timeline, 14_000).round, 1);
+  assert.equal(workoutFrame(timeline, 14_000).cycle, 2);
+  assert.equal(buildTimeline({ ...multiCycle, cycleRest: 0 }).total, 19_000);
 });
 
 test("handles the full 99-round range without adding a final rest", () => {
@@ -62,8 +79,9 @@ test("changes phases exactly at their boundary and exposes the upcoming interval
   assert.deepEqual(workoutFrame(timeline, 2000), {
     kind: "work",
     index: 1,
+    cycle: 1,
     round: 1,
-    next: { kind: "rest", round: 1, start: 5000, end: 7000 },
+    next: { kind: "rest", cycle: 1, round: 1, start: 5000, end: 7000 },
     remaining: 3000,
     totalRemaining: 9000,
     progress: 0,
@@ -87,11 +105,28 @@ test("derives phase progress from elapsed time, even when updates were missed", 
 test("holds the completed state on and after the end boundary", () => {
   const timeline = buildTimeline(config);
   const finished = {
-    kind: "finished", index: 5, round: 2, next: undefined,
+    kind: "finished", index: 5, cycle: 1, round: 2, next: undefined,
     remaining: 0, totalRemaining: 0, progress: 1, phaseEnd: 11_000,
   };
   assert.deepEqual(workoutFrame(timeline, 11_000), finished);
   assert.deepEqual(workoutFrame(timeline, 3_600_000), finished);
+});
+
+test("separates stopwatch preparation from elapsed time and schedules recurring lap cues", () => {
+  const stopwatch = DEFAULT_TIMERS.stopwatch;
+  assert.ok(validTimer(stopwatch, "stopwatch"));
+  assert.ok(!validTimer({ prepare: 5 }, "stopwatch"));
+  assert.deepEqual(stopwatchFrame(stopwatch, 0), { remaining: 5000, elapsed: 0, nextCue: 2000 });
+  assert.deepEqual(stopwatchFrame(stopwatch, 2000), {
+    remaining: 3000, elapsed: 0, cue: "countdown", cueAt: 2000, nextCue: 3000,
+  });
+  assert.deepEqual(stopwatchFrame(stopwatch, 5000), {
+    remaining: 0, elapsed: 0, cue: "work", cueAt: 5000, nextCue: 15_000,
+  });
+  assert.deepEqual(stopwatchFrame(stopwatch, 26_500), {
+    remaining: 0, elapsed: 21_500, cue: "rest", cueAt: 25_000, nextCue: 35_000,
+  });
+  assert.equal(stopwatchFrame({ prepare: 0, timeLap: 0 }, 6000).nextCue, undefined);
 });
 
 test("paused clocks keep their accumulated time and running clocks use their start time", () => {

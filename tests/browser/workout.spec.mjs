@@ -7,19 +7,63 @@ async function openWithClock(page, path = "./") {
   await page.clock.pauseAt(new Date(start.getTime() + 60_000));
 }
 
+async function captureAudio(page) {
+  await page.addInitScript(() => {
+    window.workoutAudio = [];
+    for (const [prototype, kind] of [[OscillatorNode.prototype, "bip"], [AudioBufferSourceNode.prototype, "bell"]]) {
+      const start = prototype.start;
+      prototype.start = function (...args) {
+        window.workoutAudio.push({ kind, time: Date.now() });
+        return start.apply(this, args);
+      };
+    }
+  });
+  return () => page.evaluate(() => window.workoutAudio);
+}
+
+test("sounds one bip at 3, 2, and 1 seconds before the next phase bell", async ({ page }) => {
+  const audio = await captureAudio(page);
+  await openWithClock(page);
+  const button = (name) => page.getByRole("button", { name, exact: true });
+  await button("Start").click();
+  await expect.poll(async () => (await audio()).map(({ kind }) => kind)).toEqual(["bell", "bell", "bell"]);
+
+  await page.clock.fastForward(56_000);
+  await expect(page.locator("#phase-time")).toHaveText("00:04");
+  expect(await audio()).toHaveLength(3);
+  const countdownStart = await page.evaluate(() => Date.now() + 1000);
+
+  await page.clock.runFor(1000);
+  await button("Pause").click();
+  await page.clock.runFor(5000);
+  await button("Resume").click();
+  expect((await audio()).slice(3)).toEqual([{ kind: "bip", time: countdownStart }]);
+
+  await page.getByRole("link", { name: "Stopwatch", exact: true }).click();
+  await page.clock.runFor(3000);
+  await expect.poll(async () => (await audio()).slice(3)).toEqual([
+    { kind: "bip", time: countdownStart },
+    { kind: "bip", time: countdownStart + 6000 },
+    { kind: "bip", time: countdownStart + 7000 },
+    { kind: "bell", time: countdownStart + 8000 },
+    { kind: "bell", time: countdownStart + 8000 },
+  ]);
+});
+
 test("runs prepare, work, rest, and cooldown with pause, reload, skip, and reset", async ({ page }) => {
   await openWithClock(page, "./#tabata");
   const phase = page.locator("#phase-name");
   const time = page.locator("#phase-time");
   const button = (name) => page.getByRole("button", { name, exact: true });
-  await expect(time).toHaveText("00:20");
-  await expect(page.locator("#workout-total")).toHaveText("04:00");
+  await expect(time).toHaveText("00:05");
+  await expect(page.locator("#workout-total")).toHaveText("18:50");
 
   await button("Edit timer").click();
   for (const [name, seconds] of [["Prepare", "2"], ["Work", "3"], ["Rest", "2"], ["Cooldown", "1"]]) {
     await page.getByRole("group", { name, exact: true }).getByLabel("Sec").fill(seconds);
   }
   await page.getByRole("group", { name: "Rounds", exact: true }).getByLabel("Count").fill("2");
+  await page.getByRole("group", { name: "Cycles", exact: true }).getByLabel("Count").fill("1");
   await expect(page.locator("#editor-total")).toHaveText("00:11");
   await button("Save timer").click();
   await expect(phase).toHaveText("Prepare");
@@ -60,6 +104,33 @@ test("runs prepare, work, rest, and cooldown with pause, reload, skip, and reset
   await expect(time).toHaveText("00:02");
 });
 
+test("saves Tabata cycles and starts a new round after cycle recovery", async ({ page }) => {
+  await openWithClock(page, "./#tabata");
+  const button = (name) => page.getByRole("button", { name, exact: true });
+  const field = (name) => page.getByRole("group", { name, exact: true });
+  await button("Edit timer").click();
+  await expect(field("Cycles").getByLabel("Count")).toHaveValue("3");
+  await expect(field("Rest between cycles").getByLabel("Sec")).toHaveValue("30");
+  for (const [name, seconds] of [["Prepare", "0"], ["Work", "2"], ["Rest between cycles", "3"], ["Cooldown", "0"]]) {
+    await field(name).getByLabel("Sec").fill(seconds);
+  }
+  await field("Rounds").getByLabel("Count").fill("1");
+  await field("Cycles").getByLabel("Count").fill("2");
+  await button("Save timer").click();
+  await page.reload();
+  await expect(page.locator("#workout-total")).toHaveText("00:07");
+  await expect(page.locator("#cycle-summary")).toHaveText("Cycle 1 / 2");
+  await button("Start").click();
+  await page.clock.runFor(2000);
+  await expect(page.locator("#phase-name")).toHaveText("Rest between cycles");
+  await expect(page.locator("#phase-time")).toHaveText("00:03");
+  await page.clock.runFor(3000);
+  await expect(page.locator("#cycle-summary")).toHaveText("Cycle 2 / 2");
+  await expect(page.locator("#round-current")).toHaveText("01");
+  await page.clock.runFor(2000);
+  await expect(page.locator("#phase-name")).toHaveText("Complete");
+});
+
 test("catches up after an interruption and protects an active workout when changing modes", async ({ page }) => {
   await page.addInitScript(() => {
     let hidden = false;
@@ -91,7 +162,7 @@ test("catches up after an interruption and protects an active workout when chang
   await expect.poll(() => page.evaluate(() => window.wakeRequests)).toEqual(["screen", "release", "screen"]);
 
   await page.getByRole("link", { name: "Tabata", exact: true }).click();
-  await expect(start).toBeDisabled();
+  await expect(start).toBeHidden();
   await page.getByRole("button", { name: "Return to workout" }).click();
   await expect(page.getByRole("heading", { name: "Rounds", exact: true })).toBeVisible();
   await expect(page.locator("#phase-time")).toHaveText("00:05");
@@ -105,6 +176,11 @@ test("records split and total stopwatch times, restores laps after reload, and r
   await openWithClock(page, "./#stopwatch");
   const button = (name) => page.getByRole("button", { name, exact: true });
   const time = page.getByRole("timer");
+  await button("Edit timer").click();
+  for (const name of ["Prepare", "Time lap"]) {
+    await page.getByRole("group", { name, exact: true }).getByLabel("Sec").fill("0");
+  }
+  await button("Save timer").click();
   await expect(button("Lap")).toBeDisabled();
   await button("Start").click();
   await page.clock.runFor(1250);
@@ -113,15 +189,21 @@ test("records split and total stopwatch times, restores laps after reload, and r
   await button("Lap").click();
   await button("Pause").click();
 
+  await expect(page.locator("#latest-split")).toHaveText("00:01.50");
+  await expect(page.locator("#latest-total")).toHaveText("00:02.75");
+  await button("Lap history").click();
   const laps = page.getByRole("table");
   await expect(laps.getByRole("row").nth(1).getByRole("cell")).toHaveText(["02", "00:01.50", "00:02.75"]);
   await expect(laps.getByRole("row").nth(2).getByRole("cell")).toHaveText(["01", "00:01.25", "00:01.25"]);
+  await button("Back").click();
   await expect(time).toHaveText("00:02.75");
 
   await page.clock.fastForward(60_000);
   await page.reload();
   await expect(time).toHaveText("00:02.75");
+  await button("Lap history").click();
   await expect(laps.getByRole("row")).toHaveCount(3);
+  await button("Back").click();
 
   await button("Resume").click();
   await page.clock.runFor(1250);
@@ -129,5 +211,42 @@ test("records split and total stopwatch times, restores laps after reload, and r
   await expect(time).toHaveText("00:04.00");
   await button("Reset stopwatch").click();
   await expect(time).toHaveText("00:00.00");
-  await expect(laps).toBeHidden();
+  await expect(button("Lap history")).toBeHidden();
+});
+
+test("counts down before starting the stopwatch and rings at each timed lap", async ({ page }) => {
+  const audio = await captureAudio(page);
+  await openWithClock(page, "./#stopwatch");
+  const button = (name) => page.getByRole("button", { name, exact: true });
+  const time = page.getByRole("timer");
+  await button("Edit timer").click();
+  const field = (name) => page.getByRole("group", { name, exact: true }).getByLabel("Sec");
+  await expect(field("Prepare")).toHaveValue("5");
+  await expect(field("Time lap")).toHaveValue("10");
+  await field("Time lap").fill("4");
+  await button("Save as new timer").click();
+  await page.getByLabel("Timer name").fill("Timed laps");
+  await button("Save timer").click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Timed laps" })).toBeVisible();
+  await expect(time).toHaveText("00:05");
+  await button("Start").click();
+  await expect(button("Lap")).toBeDisabled();
+  const sounds = async () => (await audio()).map(({ kind }) => kind);
+  await page.clock.runFor(2000);
+  await expect.poll(sounds).toEqual(["bip"]);
+  await page.clock.runFor(3000);
+  await expect(time).toHaveText("00:00.00");
+  await expect(button("Lap")).toBeEnabled();
+  const start = ["bip", "bip", "bip", "bell", "bell", "bell"];
+  await expect.poll(sounds).toEqual(start);
+
+  await page.clock.runFor(4000);
+  await expect.poll(sounds).toEqual([...start, "bell", "bell"]);
+  await expect(button("Lap history")).toBeHidden();
+  await button("Lap").click();
+  await expect(page.locator("#latest-split")).toHaveText("00:04.00");
+  await expect(page.locator("#latest-total")).toHaveText("00:04.00");
+  await page.clock.runFor(4000);
+  await expect.poll(sounds).toEqual([...start, "bell", "bell", "bell", "bell"]);
 });

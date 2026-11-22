@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
-import { PHASE_NAMES } from "../../timer.mjs";
 
 const root = new URL("../../", import.meta.url);
 const scope = "https://example.test/cadence/";
@@ -130,13 +129,13 @@ test("precaches all shipped UI, font, icon and voice assets with unique scoped U
 
   const html = await readFile(new URL("index.html", root), "utf8");
   const css = await readFile(new URL("styles.css", root), "utf8");
+  const sounds = (await readdir(new URL("assets/", root))).filter((file) => file.endsWith(".wav"));
   const references = [
     "./index.html", "./timer.mjs", "./cues.mjs", "./pwa.mjs", "./version.js",
-    "./assets/bell-hand.wav", "./assets/bell-tubular.wav",
     ...Array.from(html.matchAll(/(?:href|src)="(\.\/[^"]+)"/g), (match) => match[1]),
     ...Array.from(css.matchAll(/url\("\.\/([^"]+)"\)/g), (match) => `./${match[1]}`),
     ...manifest.icons.map((icon) => icon.src),
-    ...Object.keys(PHASE_NAMES).map((phase) => `./assets/voice-${phase}.wav`),
+    ...sounds.map((sound) => `./assets/${sound}`),
   ];
   for (const reference of references) {
     assert.ok(cached.includes(new URL(reference, scope).href), `${reference} is missing offline`);

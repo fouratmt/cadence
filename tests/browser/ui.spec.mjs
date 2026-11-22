@@ -52,6 +52,79 @@ test("keeps the oversized countdown and controls visible across viewport sizes",
   }
 });
 
+test("fits each timer with prompts, a long title, and saved laps", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (iPhone) AppleWebKit Safari" });
+    window.addEventListener("beforeinstallprompt", (event) => event.stopImmediatePropagation(), { capture: true });
+    const config = { prepare: 0, work: 60, rest: 10, rounds: 1, cycles: 2, cycleRest: 60, cooldown: 0 };
+    sessionStorage.setItem("cadence:session:v1", JSON.stringify({
+      interval: { mode: "tabata", name: "A really long title for my Tabata preset", config, elapsed: 62_000, startedAt: null },
+      stopwatch: { elapsed: 12_000, startedAt: null, laps: Array.from({ length: 100 }, (_, index) => (index + 1) * 120) },
+    }));
+  });
+  await page.goto("./");
+  await expect(page.getByRole("complementary", { name: "Install Cadence" })).toBeVisible();
+
+  const viewports = [
+    { width: 320, height: 460 }, { width: 320, height: 568 }, { width: 390, height: 700 },
+    { width: 568, height: 280 }, { width: 844, height: 390 }, { width: 1440, height: 900 },
+  ];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    for (const mode of ["Rounds", "Tabata", "Stopwatch"]) {
+      await test.step(`${mode} at ${viewport.width} × ${viewport.height}`, async () => {
+        await page.getByRole("link", { name: mode, exact: true }).click();
+        await page.evaluate(() => document.fonts.ready);
+        const problems = await page.evaluate(() => {
+          const doc = document.documentElement;
+          const main = document.querySelector("main");
+          const view = main.querySelector(".timer-view:not([hidden])");
+          const bounds = main.getBoundingClientRect();
+          const elements = view.querySelectorAll("button, .phase-header, .phase-time, .next-panel, .round-panel, .laps-panel");
+          const clipped = Array.from(elements).filter((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && (rect.left < bounds.left - 1 || rect.right > bounds.right + 1 ||
+              rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1 || element.scrollWidth > element.clientWidth + 1);
+          });
+          return [
+            ...(doc.scrollWidth > doc.clientWidth || doc.scrollHeight > doc.clientHeight ? ["page scrolls"] : []),
+            ...(main.scrollWidth > main.clientWidth || main.scrollHeight > main.clientHeight ? ["timer scrolls"] : []),
+            ...(view.querySelector(".phase-time").getBoundingClientRect().height < 20 ? ["clock is too small"] : []),
+            ...clipped.map((element) => "clipped " + (element.id || element.className)),
+          ];
+        });
+        expect(problems).toEqual([]);
+      });
+    }
+  }
+});
+
+test("pins the header and mode bar as settings and lap history scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.addInitScript(() => {
+    localStorage.setItem("cadence:install-prompt", '{"dismissed":true}');
+    sessionStorage.setItem("cadence:session:v1", JSON.stringify({
+      stopwatch: { elapsed: 100_000, startedAt: null, laps: Array.from({ length: 100 }, (_, index) => (index + 1) * 1000) },
+    }));
+  });
+  await page.goto("./#stopwatch");
+  const main = page.locator("main");
+  const chrome = () => page.evaluate(() => [".masthead", ".tab-bar"].map((selector) => {
+    const { top, bottom } = document.querySelector(selector).getBoundingClientRect();
+    return { top, bottom };
+  }));
+  const initialChrome = await chrome();
+
+  for (const label of ["Settings", "Lap history"]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await main.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    expect(await main.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await chrome()).toEqual(initialChrome);
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    expect(await main.evaluate((element) => element.scrollTop)).toBe(0);
+  }
+});
+
 test("supports keyboard navigation and marks the active timer mode", async ({ page }) => {
   await page.goto("./");
   const tabata = page.getByRole("link", { name: "Tabata", exact: true });
@@ -107,6 +180,16 @@ test.describe("accessibility", () => {
     test(view, async ({ page }) => {
       await page.goto("./");
       await page.getByRole("button", { name: view, exact: true }).click();
+      await checkAccessibility(page);
+    });
+  }
+
+  for (const mode of ["tabata", "stopwatch"]) {
+    test(`${mode} timer editor`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 568 });
+      await page.goto(`./#${mode}`);
+      await page.getByRole("button", { name: "Edit timer", exact: true }).click();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
       await checkAccessibility(page);
     });
   }

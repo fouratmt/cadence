@@ -27,23 +27,32 @@ function installAudio(t, fetchAudio = async (file) => audioResponse(file)) {
     return fetchAudio(file);
   });
 
+  function createSource(properties) {
+    const node = {
+      ...properties,
+      connect: (destination) => destination,
+      start: (when) => started.push({ node, when }),
+      stop: (when) => stopped.push({ node, when }),
+    };
+    return node;
+  }
+
   setGlobal(t, "AudioContext", class {
     state = "running";
     currentTime = 5;
 
     createBufferSource() {
-      const node = {
-        playbackRate: {},
-        connect: (destination) => destination,
-        start: (when) => started.push({ node, when }),
-        stop: (when) => stopped.push({ node, when }),
-      };
-      return node;
+      return createSource({ playbackRate: {} });
+    }
+
+    createOscillator() {
+      return createSource({ frequency: {} });
     }
 
     createGain() {
+      const ramps = [];
       const gain = {
-        gain: { setValueAtTime() {}, linearRampToValueAtTime() {} },
+        gain: { ramps, setValueAtTime() {}, linearRampToValueAtTime: (...args) => ramps.push(args) },
         connect() {},
       };
       gains.push(gain.gain);
@@ -79,6 +88,24 @@ test("plays a rising work melody and a descending rest melody using recorded bel
   await cues.play("rest", { ...setting, sound: false });
   await cues.play("rest", { ...setting, volume: 0 });
   assert.equal(started.length, 5);
+});
+
+test("plays a short countdown bip at the selected volume and respects mute", async (t) => {
+  const { started, stopped, gains } = installAudio(t);
+  const cues = new WorkoutCues();
+  const settings = { ...DEFAULT_SETTINGS, volume: 50 };
+  cues.prepare(settings);
+
+  await cues.countdown(settings);
+  assert.equal(started[0].node.frequency.value, 880);
+  assert.equal(stopped[0].when, 5.09);
+  assert.deepEqual(gains[0].ramps, [[.11, 5.005], [0, 5.09]]);
+  cues.stop();
+  assert.deepEqual(stopped[1], { node: started[0].node, when: undefined });
+
+  await cues.countdown({ ...settings, sound: false, voice: true });
+  await cues.countdown({ ...settings, volume: 0 });
+  assert.equal(started.length, 1);
 });
 
 test("plays the bundled voice after the bell phrase and applies the selected volume", async (t) => {

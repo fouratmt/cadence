@@ -10,6 +10,7 @@ test("creates, renames, loads, copies, and deletes named presets", async ({ page
   await button("New timer").click();
   await page.getByLabel("Mode", { exact: true }).selectOption("tabata");
   await name.fill("  Speed work  ");
+  await page.getByRole("group", { name: "Prepare", exact: true }).getByLabel("Sec").fill("0");
   await page.getByRole("group", { name: "Work", exact: true }).getByLabel("Sec").fill("15");
   await button("Save timer").click();
   await expect(savedTimer("Speed work")).toBeVisible();
@@ -42,7 +43,7 @@ test("creates, renames, loads, copies, and deletes named presets", async ({ page
   await expect(savedTimer("Warmup")).toHaveCount(0);
   await page.getByRole("link", { name: "Tabata", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Tabata", exact: true })).toBeVisible();
-  await expect(page.locator("#phase-time")).toHaveText("00:20");
+  await expect(page.locator("#phase-time")).toHaveText("00:05");
 });
 
 test("keeps the editor open for invalid work durations and whitespace-only names", async ({ page }) => {
@@ -75,7 +76,7 @@ test("restores preferences and uses the chosen time format and colors", async ({
   await page.getByLabel("Time format").selectOption("compact");
   await page.getByLabel("Sound style").selectOption("Hand chimes");
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(page.locator("#phase-time")).toHaveText("0:20");
+  await expect(page.locator("#phase-time")).toHaveText("0:05");
   await expect(page.locator("body")).toHaveClass("pale");
 
   await page.reload();
@@ -96,6 +97,7 @@ test("migrates existing presets, preferences, and a paused workout to Cadence", 
     }));
     sessionStorage.setItem("sports-timer:session:v1", JSON.stringify({
       interval: { mode: "rounds", name: "Hill repeats", config, elapsed: 31_000, startedAt: null },
+      stopwatch: { elapsed: 8000, startedAt: null, laps: [3000] },
     }));
   });
   await page.goto("./");
@@ -113,4 +115,9 @@ test("migrates existing presets, preferences, and a paused workout to Cadence", 
   await page.getByRole("link", { name: "More", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Hill repeats Rounds/ })).toBeVisible();
   expect(await page.evaluate(() => Boolean(sessionStorage.getItem("cadence:session:v1")))).toBe(true);
+
+  await page.getByRole("link", { name: "Stopwatch", exact: true }).click();
+  await expect(page.getByRole("timer")).toHaveText("00:08.00");
+  await page.getByRole("button", { name: "Lap history", exact: true }).click();
+  await expect(page.getByRole("cell", { name: "00:03.00" })).toHaveCount(2);
 });

@@ -102,7 +102,7 @@ test("each bell phrase starts promptly and stays below clipping at full volume",
     return results;
   });
 
-  expect(mixes).toHaveLength(15);
+  expect(mixes).toHaveLength(18);
   for (const { phase, soundStyle, peak, firstNote, sampleRate } of mixes) {
     const cue = `${soundStyle} ${phase}`;
     expect(peak, cue).toBeGreaterThan(.05);

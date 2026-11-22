@@ -47,52 +47,51 @@
   </svg>
 
   <div class="app-shell">
-    <header class="masthead">
-      <div class="brand-lockup">
-        <a class="brand" href="#rounds" aria-label="Cadence home">
-          <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-brand"/></svg></span>
-          <span>Cadence</span>
-        </a>
-        <small class="app-version" id="app-version"></small>
-      </div>
-      <button class="button button-quiet masthead-setting" type="button" data-action="settings">
-        <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span>
-      </button>
-    </header>
+    <div class="app-top">
+      <header class="masthead">
+        <div class="brand-lockup">
+          <a class="brand" href="#rounds" aria-label="Cadence home">
+            <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-brand"/></svg></span>
+            <span>Cadence</span>
+          </a>
+          <small class="app-version" id="app-version"></small>
+        </div>
+        <button class="button button-quiet masthead-setting" type="button" data-action="settings">
+          <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span>
+        </button>
+      </header>
 
-    <aside id="install-notice" class="pwa-notice" aria-labelledby="install-notice-title" hidden>
-      <strong class="pwa-notice-copy" id="install-notice-title">Install Cadence</strong>
-      <button id="install-notice-action" class="button button-primary" type="button" data-action="install">Show steps</button>
-      <button class="button button-icon" type="button" data-action="dismiss-install" aria-label="Dismiss install prompt">
-        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
-      </button>
-    </aside>
+      <aside id="install-notice" class="pwa-notice" aria-labelledby="install-notice-title" hidden>
+        <strong class="pwa-notice-copy" id="install-notice-title">Install Cadence</strong>
+        <button id="install-notice-action" class="button button-primary" type="button" data-action="install">Show steps</button>
+        <button class="button button-icon" type="button" data-action="dismiss-install" aria-label="Dismiss install prompt">
+          <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+      </aside>
 
-    <aside id="update-notice" class="pwa-notice" aria-labelledby="update-notice-title" hidden>
-      <div class="pwa-notice-copy">
-        <strong id="update-notice-title">Update available</strong>
-        <p>Cadence will reload.</p>
-      </div>
-      <button id="update-button" class="button button-primary" type="button" data-action="update">Update</button>
-      <button class="button button-icon" type="button" data-action="dismiss-update" aria-label="Dismiss update prompt">
-        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
-      </button>
-    </aside>
+      <aside id="update-notice" class="pwa-notice" aria-labelledby="update-notice-title" hidden>
+        <div class="pwa-notice-copy">
+          <strong id="update-notice-title">Update available</strong>
+          <p>Cadence will reload.</p>
+        </div>
+        <button id="update-button" class="button button-primary" type="button" data-action="update">Update</button>
+        <button class="button button-icon" type="button" data-action="dismiss-update" aria-label="Dismiss update prompt">
+          <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+      </aside>
+    </div>
 
     <main id="main">
-      <section id="interval-view" aria-labelledby="interval-title">
+      <section id="interval-view" class="timer-view" aria-labelledby="interval-title">
         <div class="page-heading">
           <div>
             <h1 id="interval-title" tabindex="-1">Rounds</h1>
-            <p class="heading-detail"><span id="workout-total">09:20</span> <span id="workout-total-label">total</span></p>
+            <p class="heading-detail" id="interval-detail"><span id="workout-total">09:20</span> <span id="workout-total-label">total</span></p>
+            <p class="heading-detail" id="active-workout" hidden>Workout in progress</p>
           </div>
           <button class="button button-quiet" type="button" data-action="edit-timer" id="edit-timer">
             <svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg><span>Edit timer</span>
           </button>
-        </div>
-        <div id="active-workout" class="notice" hidden>
-          <p>A workout is already in progress.</p>
-          <button class="button button-quiet" type="button" data-action="return-workout">Return to workout</button>
         </div>
         <div class="console interval-console">
           <div id="phase-panel" class="phase-panel" data-phase="work">
@@ -100,7 +99,7 @@
               <p id="phase-name" class="phase-name" aria-live="polite">Work</p>
               <span id="phase-status" class="phase-status">Ready</span>
             </div>
-            <div id="phase-time" class="phase-time interval-time" role="timer">01:00</div>
+            <div class="clock-well"><div id="phase-time" class="phase-time interval-time" role="timer">01:00</div></div>
             <div class="phase-track" aria-hidden="true"><span id="phase-fill"></span></div>
           </div>
           <div class="console-rail">
@@ -114,8 +113,10 @@
                 <p class="round-count"><span id="round-current">01</span><span class="round-divider">/</span><span id="round-total">08</span></p>
               </div>
               <div id="round-track" class="round-track" aria-hidden="true"></div>
+              <p class="cycle-summary" id="cycle-summary" hidden>Cycle <span id="cycle-progress"></span></p>
             </div>
             <div class="console-actions">
+              <button id="return-workout" class="button button-primary" type="button" data-action="return-workout" hidden>Return to workout</button>
               <button id="interval-main" class="button button-primary" type="button" data-action="interval-main">
                 <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Start</span>
               </button>
@@ -130,27 +131,40 @@
         </div>
       </section>
 
-      <section id="stopwatch-view" aria-labelledby="stopwatch-title" hidden>
+      <section id="stopwatch-view" class="timer-view" aria-labelledby="stopwatch-title" hidden>
         <div class="page-heading">
-          <div><h1 id="stopwatch-title" tabindex="-1">Stopwatch</h1><p class="heading-detail">Elapsed time and laps</p></div>
+          <div><h1 id="stopwatch-title" tabindex="-1">Stopwatch</h1><p class="heading-detail" id="stopwatch-detail">Elapsed time and laps</p></div>
+          <button id="edit-stopwatch" class="button button-quiet" type="button" data-action="edit-timer"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg> Edit timer</button>
         </div>
         <div class="console stopwatch-console">
-          <div class="phase-panel stopwatch-panel" data-phase="stopwatch">
-            <div class="phase-header"><p class="phase-name">Elapsed</p><span class="phase-status" id="stopwatch-status">Ready</span></div>
-            <div class="phase-time" role="timer"><span id="stopwatch-time">00:00</span><span id="stopwatch-fraction" class="fraction">.00</span></div>
-            <div class="console-actions stopwatch-actions">
-              <button id="stopwatch-main" class="button button-primary" type="button" data-action="stopwatch-main"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Start</span></button>
-              <button id="stopwatch-lap" class="button button-quiet" type="button" data-action="stopwatch-lap" disabled><svg class="icon" aria-hidden="true"><use href="#i-flag"/></svg><span>Lap</span></button>
-              <button id="stopwatch-reset" class="button button-quiet button-icon" type="button" data-action="stopwatch-reset" aria-label="Reset stopwatch" title="Reset stopwatch" disabled><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
-            </div>
+          <div id="stopwatch-panel" class="phase-panel stopwatch-panel" data-phase="stopwatch">
+            <div class="phase-header"><p class="phase-name" id="stopwatch-phase">Elapsed</p><span class="phase-status" id="stopwatch-status">Ready</span></div>
+            <div class="clock-well"><div class="phase-time stopwatch-time" role="timer"><span id="stopwatch-time">00:00</span><span id="stopwatch-fraction" class="fraction">.00</span></div></div>
+          </div>
+          <div class="console-actions stopwatch-actions">
+            <button id="stopwatch-main" class="button button-primary" type="button" data-action="stopwatch-main"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Start</span></button>
+            <button id="stopwatch-lap" class="button button-quiet" type="button" data-action="stopwatch-lap" disabled><svg class="icon" aria-hidden="true"><use href="#i-flag"/></svg><span>Lap</span></button>
+            <button id="stopwatch-reset" class="button button-quiet button-icon" type="button" data-action="stopwatch-reset" aria-label="Reset stopwatch" title="Reset stopwatch" disabled><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
           </div>
           <div class="laps-panel">
-            <h2>Laps</h2>
-            <p class="muted" id="laps-empty">Tap Lap while the stopwatch is running.</p>
-            <div id="laps-table-wrap" class="laps-table-wrap" hidden>
-              <table><thead><tr><th scope="col">Lap</th><th scope="col">Split</th><th scope="col">Total</th></tr></thead><tbody id="laps"></tbody></table>
+            <div>
+              <h2 id="latest-lap-title">Laps</h2>
+              <p class="muted" id="laps-empty">Tap Lap to record a split.</p>
+              <dl id="latest-lap" hidden>
+                <div><dt>Split</dt><dd id="latest-split"></dd></div>
+                <div><dt>Total</dt><dd id="latest-total"></dd></div>
+              </dl>
             </div>
+            <button class="button button-quiet" id="show-laps" type="button" data-action="show-laps" hidden><span>Lap history</span><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
           </div>
+        </div>
+      </section>
+
+      <section id="laps-view" class="content-view" aria-labelledby="laps-title" hidden>
+        <button class="button button-back" type="button" data-action="close-laps"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg> Back</button>
+        <div class="page-heading"><h1 id="laps-title" tabindex="-1">Lap history</h1></div>
+        <div class="list-panel laps-history">
+          <table><thead><tr><th scope="col">Lap</th><th scope="col">Split</th><th scope="col">Total</th></tr></thead><tbody id="laps"></tbody></table>
         </div>
       </section>
 
@@ -173,14 +187,14 @@
       <section id="editor-view" class="content-view" aria-labelledby="editor-title" hidden>
         <button class="button button-back" type="button" data-action="close-editor"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg> Back</button>
         <div class="page-heading">
-          <div><h1 id="editor-title" tabindex="-1">Edit timer</h1><p class="heading-detail"><span id="editor-total">09:20</span> total</p></div>
+          <div><h1 id="editor-title" tabindex="-1">Edit timer</h1><p class="heading-detail" id="editor-total-wrap"><span id="editor-total">09:20</span> total</p></div>
         </div>
         <form id="timer-form">
           <div id="preset-fields" class="list-panel form-info" hidden>
             <label for="preset-name">Timer name</label>
             <input id="preset-name" type="text" maxlength="48" placeholder="e.g. Boxing practice" autocomplete="off">
             <label for="preset-mode" id="preset-mode-label">Mode</label>
-            <select id="preset-mode"><option value="rounds">Rounds</option><option value="tabata">Tabata</option></select>
+            <select id="preset-mode"><option value="rounds">Rounds</option><option value="tabata">Tabata</option><option value="stopwatch">Stopwatch</option></select>
           </div>
           <div class="list-panel duration-list" id="duration-list"></div>
           <div class="form-actions">
@@ -197,7 +211,7 @@
         <form id="settings-form">
           <section class="list-panel settings-panel" aria-labelledby="cues-title">
             <div class="list-heading"><h2 id="cues-title">Workout cues</h2></div>
-            <label class="setting-row" for="sound"><span><strong>Interval sounds</strong><small>Play a bell melody when the phase changes.</small></span><input class="switch" id="sound" name="sound" type="checkbox" role="switch"></label>
+            <label class="setting-row" for="sound"><span><strong>Interval sounds</strong><small>Play countdown bips and phase-change bells.</small></span><input class="switch" id="sound" name="sound" type="checkbox" role="switch"></label>
             <label class="setting-row" for="sound-style"><span><strong>Sound style</strong></span><select id="sound-style" name="soundStyle"><option value="bell">Tubular bells</option><option value="beep">Hand chimes</option><option value="pulse">Soft chimes</option></select></label>
             <div class="setting-row volume-row">
               <label for="volume"><strong>Volume</strong><output id="volume-value" for="volume">65%</output></label>

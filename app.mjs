@@ -1,23 +1,30 @@
 import {
   buildTimeline, DEFAULT_SETTINGS, DEFAULT_TIMERS, elapsedTime, formatTime,
-  pad, PHASE_NAMES, stopwatchValue, validTimer, workoutFrame,
+  pad, PHASE_NAMES, stopwatchFrame, stopwatchValue, validTimer, workoutFrame,
 } from "./timer.mjs";
 import { ScreenAwake, WorkoutCues } from "./cues.mjs";
 import { setupPwa } from "./pwa.mjs";
 
 const byId = (id) => document.getElementById(id);
 const modes = ["rounds", "tabata", "stopwatch", "more"];
-const modeNames = { rounds: "Rounds", tabata: "Tabata" };
+const modeNames = { rounds: "Rounds", tabata: "Tabata", stopwatch: "Stopwatch" };
+const intervalModes = ["rounds", "tabata"];
 const storageKey = "cadence:v1";
 const sessionKey = "cadence:session:v1";
 const installKey = "cadence:install-prompt";
 const fields = {
-  prepare: "Prepare",
-  work: "Work",
-  rest: "Rest",
-  rounds: "Rounds",
-  cooldown: "Cooldown",
+  rounds: ["prepare", "work", "rest", "rounds", "cooldown"],
+  tabata: ["prepare", "work", "rest", "rounds", "cycles", "cycleRest", "cooldown"],
+  stopwatch: ["prepare", "timeLap"],
 };
+const fieldLabels = { ...PHASE_NAMES, rounds: "Rounds", cycles: "Cycles", timeLap: "Time lap" };
+const fieldDetails = {
+  prepare: "Countdown before the timer starts.",
+  cycles: "Repeat the full set of rounds.",
+  cycleRest: "Recovery between sets of rounds.",
+  timeLap: "Ring at each timed lap. Set to zero to turn it off.",
+};
+const countFields = ["rounds", "cycles"];
 
 function read(storageName, key, previousKey) {
   try {
@@ -47,11 +54,11 @@ function write(storageName, key, data) {
 const stored = read("localStorage", storageKey, "sports-timer:v1");
 const settings = { ...DEFAULT_SETTINGS, ...stored.settings };
 const baseTimers = Object.fromEntries(Object.entries(DEFAULT_TIMERS).map(([key, config]) =>
-  [key, validTimer(stored.baseTimers?.[key]) ? stored.baseTimers[key] : config]
+  [key, validTimer(stored.baseTimers?.[key], key) ? stored.baseTimers[key] : config]
 ));
 let presets = Array.isArray(stored.presets) ? stored.presets.filter((preset) =>
   typeof preset?.name === "string" && typeof preset.id === "string" &&
-  Object.hasOwn(modeNames, preset.mode) && validTimer(preset.config)
+  Object.hasOwn(modeNames, preset.mode) && validTimer(preset.config, preset.mode)
 ) : [];
 const selected = { ...stored.selected };
 
@@ -63,21 +70,31 @@ function persist() {
 
 const savedSession = read("sessionStorage", sessionKey, "sports-timer:session:v1");
 const savedInterval = savedSession.interval;
-let interval = Object.hasOwn(modeNames, savedInterval?.mode) && validTimer(savedInterval.config)
+let interval = intervalModes.includes(savedInterval?.mode) && validTimer(savedInterval.config)
   ? { ...savedInterval, timeline: buildTimeline(savedInterval.config) }
   : null;
-let stopwatch = savedSession.stopwatch ?? { elapsed: 0, startedAt: null, laps: [] };
+let stopwatch = { elapsed: 0, startedAt: null, laps: [], ...savedSession.stopwatch };
+if (!validTimer(stopwatch.config, "stopwatch")) {
+  // Sessions saved before stopwatch settings measured elapsed time from zero.
+  stopwatch.config = stopwatch.startedAt !== null || stopwatch.elapsed > 0 || stopwatch.laps.length
+    ? { prepare: 0, timeLap: 0 } : undefined;
+}
 let mode = readMode();
-let view = Object.hasOwn(modeNames, mode) ? "interval" : mode;
+let view = intervalModes.includes(mode) ? "interval" : mode;
 let editor;
 let editorReturn;
 let settingsReturn;
 let deleteId;
 let intervalTimeout;
 let stopwatchAnimation;
-let lastIndex = interval ? workoutFrame(interval.timeline, elapsedTime(interval)).index : -1;
+let stopwatchTimeout;
+let lastStopwatchCue = stopwatch.config ? stopwatchFrame(stopwatch.config, elapsedTime(stopwatch)).cueAt : undefined;
+const savedFrame = interval && workoutFrame(interval.timeline, elapsedTime(interval));
+let lastIndex = savedFrame?.index ?? -1;
+let lastCountdownSecond = Math.ceil((savedFrame?.remaining ?? 0) / 1000);
 let lastRoundTrack = "";
 const cues = new WorkoutCues();
+const stopwatchCues = new WorkoutCues();
 const screenAwake = new ScreenAwake(drawWakeStatus);
 
 function saveSession() {
@@ -133,13 +150,13 @@ function navigate(nextMode) {
 
 function setMode(nextMode, focus = true) {
   mode = nextMode;
-  swapView(Object.hasOwn(modeNames, mode) ? "interval" : mode, focus);
+  swapView(intervalModes.includes(mode) ? "interval" : mode, focus);
 }
 
 function swapView(next, focus = true) {
   const changed = view !== next;
   view = next;
-  for (const name of ["interval", "stopwatch", "more", "editor", "settings"]) {
+  for (const name of ["interval", "stopwatch", "laps", "more", "editor", "settings"]) {
     byId(`${name}-view`).hidden = name !== next;
   }
   for (const link of document.querySelectorAll(".tab-bar a")) {
@@ -148,11 +165,12 @@ function swapView(next, focus = true) {
   }
 
   syncInterval(true);
-  drawStopwatch();
+  syncStopwatch();
   if (view === "more") drawPresets();
+  if (view === "laps") drawLaps();
   if (focus) {
     byId(`${view}-title`).focus({ preventScroll: true });
-    if (changed) window.scrollTo(0, 0);
+    if (changed) byId("main").scrollTop = 0;
   }
 }
 
@@ -195,6 +213,7 @@ function drawInterval(now) {
   text("workout-total", time(Math.ceil(frame.totalRemaining / 1000)));
   text("workout-total-label", !workout ? "total" : "left in workout");
   byId("active-workout").hidden = !otherActive;
+  byId("interval-detail").hidden = otherActive;
   byId("edit-timer").disabled = !editable;
   phasePanel.dataset.phase = frame.kind;
   text("phase-name", PHASE_NAMES[frame.kind]);
@@ -210,10 +229,15 @@ function drawInterval(now) {
   text("round-label", finished ? "Rounds done" : "Round");
   text("round-current", finished ? pad(timeline.rounds) : pad(frame.round || 1));
   text("round-total", pad(timeline.rounds));
+  byId("cycle-summary").hidden = timeline.cycles === 1;
+  text("cycle-progress", `${frame.cycle} / ${timeline.cycles}`);
   drawRoundTrack(frame.round, timeline.rounds, finished);
 
   setMainButton("interval-main", finished ? "Restart" : running ? "Pause" : workout ? "Resume" : "Start");
-  byId("interval-main").disabled = otherActive;
+  byId("return-workout").hidden = !otherActive;
+  byId("interval-main").hidden = otherActive;
+  byId("interval-skip").hidden = otherActive;
+  byId("interval-reset").hidden = otherActive;
   byId("interval-skip").disabled = !workout || finished;
   byId("interval-reset").disabled = !workout;
 }
@@ -239,15 +263,22 @@ function syncInterval(allowCue = false) {
       const start = interval.timeline.phases[frame.index]?.start ?? interval.timeline.total;
       if (allowCue && elapsed - start < 1500) phaseCue(frame.kind);
       lastIndex = frame.index;
+      lastCountdownSecond = 0;
     }
     if (frame.kind === "finished") {
       interval.elapsed = interval.timeline.total;
       interval.startedAt = null;
       saveSession();
     } else {
-      const remainder = Math.ceil(frame.remaining / 1000);
-      const toNextSecond = frame.remaining - (remainder - 1) * 1000;
-      const delay = document.hidden || view !== "interval" ? frame.remaining : toNextSecond;
+      const seconds = Math.ceil(frame.remaining / 1000);
+      const toNextSecond = frame.remaining - (seconds - 1) * 1000;
+      // Skip stale bips when the browser wakes up partway through a second.
+      if (allowCue && seconds <= 3 && seconds !== lastCountdownSecond && toNextSecond >= 700) {
+        cues.countdown(settings);
+      }
+      lastCountdownSecond = seconds;
+      const delay = (document.hidden || view !== "interval") && seconds > 3
+        ? frame.remaining - 3000 : toNextSecond;
       intervalTimeout = setTimeout(() => syncInterval(true), Math.max(12, delay));
     }
   }
@@ -289,7 +320,10 @@ function skipInterval() {
   const running = interval.startedAt !== null;
   interval.elapsed = frame.phaseEnd;
   interval.startedAt = running ? Date.now() : null;
-  if (!running) lastIndex = frame.index + 1;
+  if (!running) {
+    lastIndex = frame.index + 1;
+    lastCountdownSecond = 0;
+  }
   saveSession();
   syncInterval(running);
 }
@@ -305,19 +339,49 @@ function resetInterval() {
 function drawStopwatch() {
   cancelAnimationFrame(stopwatchAnimation);
   if (view !== "stopwatch") return;
-  const elapsed = elapsedTime(stopwatch);
-  const value = stopwatchValue(elapsed, settings.timeFormat);
+  const preset = selectedPreset("stopwatch");
+  const config = stopwatch.config ?? preset?.config ?? baseTimers.stopwatch;
+  const frame = stopwatchFrame(config, elapsedTime(stopwatch));
+  const preparing = Boolean(frame.remaining);
+  const value = preparing ? { time: time(Math.ceil(frame.remaining / 1000)), fraction: "" }
+    : stopwatchValue(frame.elapsed, settings.timeFormat);
+  text("stopwatch-title", stopwatch.name ?? preset?.name ?? modeNames.stopwatch);
+  text("stopwatch-detail", config.timeLap ? `Lap cue every ${time(config.timeLap)}` : "Elapsed time and laps");
+  text("stopwatch-phase", preparing ? "Prepare" : "Elapsed");
+  const panel = byId("stopwatch-panel");
+  const phase = preparing ? "prepare" : "stopwatch";
+  if (panel.dataset.phase !== phase) panel.dataset.phase = phase;
   text("stopwatch-time", value.time);
   text("stopwatch-fraction", value.fraction);
   setClockSize(byId("stopwatch-time").parentElement, value.time);
   const running = stopwatch.startedAt !== null;
-  const hasStarted = running || elapsed > 0;
+  const hasStarted = Boolean(stopwatch.config);
 
   text("stopwatch-status", running ? "Running" : hasStarted ? "Paused" : "Ready");
   setMainButton("stopwatch-main", running ? "Pause" : hasStarted ? "Resume" : "Start");
-  byId("stopwatch-lap").disabled = !running;
+  byId("stopwatch-lap").disabled = !running || preparing;
   byId("stopwatch-reset").disabled = !hasStarted;
+  byId("edit-stopwatch").disabled = hasStarted;
   if (running && !document.hidden) stopwatchAnimation = requestAnimationFrame(drawStopwatch);
+}
+
+function stopwatchAudioSettings() {
+  return { ...settings, voice: false };
+}
+
+function syncStopwatch() {
+  clearTimeout(stopwatchTimeout);
+  drawStopwatch();
+  if (stopwatch.startedAt === null) return;
+  const elapsed = elapsedTime(stopwatch);
+  const { cue, cueAt, nextCue } = stopwatchFrame(stopwatch.config, elapsed);
+  if (cue && cueAt !== lastStopwatchCue && elapsed - cueAt <= 300) {
+    const audio = stopwatchAudioSettings();
+    if (cue === "countdown") stopwatchCues.countdown(audio);
+    else stopwatchCues.play(cue, audio);
+  }
+  lastStopwatchCue = cueAt;
+  if (nextCue !== undefined) stopwatchTimeout = setTimeout(syncStopwatch, Math.max(12, nextCue - elapsed));
 }
 
 function drawLaps() {
@@ -325,7 +389,19 @@ function drawLaps() {
     const { time: whole, fraction } = stopwatchValue(lap, settings.timeFormat);
     return whole + fraction;
   };
-  const rows = stopwatch.laps.map((lap, index, laps) => {
+  const { laps } = stopwatch;
+  const count = laps.length;
+  byId("laps-empty").hidden = count > 0;
+  byId("latest-lap").hidden = count === 0;
+  byId("show-laps").hidden = count === 0;
+  text("latest-lap-title", count ? `Lap ${pad(count)}` : "Laps");
+  if (count) {
+    text("latest-split", oneTime(laps.at(-1) - (laps.at(-2) ?? 0)));
+    text("latest-total", oneTime(laps.at(-1)));
+  }
+  if (view !== "laps") return;
+
+  const rows = laps.map((lap, index) => {
     const row = document.createElement("tr");
     [pad(index + 1), oneTime(lap - (laps[index - 1] ?? 0)), oneTime(lap)].forEach((value) => {
       row.insertCell().textContent = value;
@@ -333,25 +409,33 @@ function drawLaps() {
     return row;
   });
   byId("laps").replaceChildren(...rows.reverse());
-  byId("laps-empty").hidden = rows.length > 0;
-  byId("laps-table-wrap").hidden = rows.length === 0;
 }
 
 function toggleStopwatch() {
   if (stopwatch.startedAt === null) {
+    if (!stopwatch.config) {
+      const preset = selectedPreset("stopwatch");
+      stopwatch.config = preset?.config ?? baseTimers.stopwatch;
+      stopwatch.name = preset?.name;
+      lastStopwatchCue = undefined;
+    }
+    stopwatchCues.prepare(stopwatchAudioSettings());
     stopwatch.startedAt = Date.now();
   } else {
     stopwatch.elapsed = elapsedTime(stopwatch);
     stopwatch.startedAt = null;
+    stopwatchCues.stop();
   }
   saveSession();
-  drawStopwatch();
+  syncStopwatch();
   syncWake(true);
 }
 
 function addLap() {
   if (stopwatch.startedAt === null) return;
-  stopwatch.laps.push(elapsedTime(stopwatch));
+  const frame = stopwatchFrame(stopwatch.config, elapsedTime(stopwatch));
+  if (frame.remaining) return;
+  stopwatch.laps.push(frame.elapsed);
   saveSession();
   drawLaps();
   announce(`Lap ${stopwatch.laps.length} recorded.`);
@@ -359,9 +443,10 @@ function addLap() {
 
 function resetStopwatch() {
   stopwatch = { elapsed: 0, startedAt: null, laps: [] };
+  stopwatchCues.stop();
+  syncStopwatch();
   saveSession();
   drawLaps();
-  drawStopwatch();
   syncWake();
 }
 
@@ -378,20 +463,23 @@ function drawWakeStatus(status) {
   const element = byId("wake-status");
   element.hidden = status !== "unavailable";
   element.lastElementChild.textContent = status === "unavailable"
-    ? "The browser could not keep your screen awake. Keep the app visible for workout cues."
+    ? "Screen lock can interrupt audio cues."
     : "";
 }
 
 function renderEditorFields(config) {
-  byId("duration-list").innerHTML = Object.entries(fields).map(([field, name]) => {
-    const value = config[field];
-    const count = field === "rounds";
+  byId("duration-list").innerHTML = fields[editor.mode].map((field) => {
+    const name = fieldLabels[field];
+    const count = countFields.includes(field);
+    const value = config[field] ?? (count ? 1 : 0);
+    const detail = fieldDetails[field];
     const inputs = count
       ? `<label>Count<input data-timer-field="${field}" type="number" inputmode="numeric" min="1" max="99" value="${value}" required></label>`
       : `<label>Min<input data-timer-field="${field}" type="number" inputmode="numeric" min="0" max="59" value="${Math.floor(value / 60)}" required></label>
          <label>Sec<input data-timer-field="${field}" type="number" inputmode="numeric" min="0" max="59" value="${value % 60}" required></label>`;
-    return `<div class="duration-row" role="group" aria-labelledby="field-${field}">
-      <span class="duration-title" id="field-${field}"><span class="phase-dot" data-phase="${field}"></span>${name}</span>
+    return `<div class="duration-row" role="group" aria-labelledby="field-${field}"${detail ? ` aria-describedby="detail-${field}"` : ""}>
+      <div><span class="duration-title" id="field-${field}"><span class="phase-dot" data-phase="${field}"></span>${name}</span>
+      ${detail ? `<small class="duration-detail" id="detail-${field}">${detail}</small>` : ""}</div>
       <div class="duration-inputs">${inputs}</div>
     </div>`;
   }).join("");
@@ -399,25 +487,28 @@ function renderEditorFields(config) {
 
 function editorConfig() {
   const config = {};
-  for (const field of Object.keys(fields)) {
+  for (const field of fields[editor.mode]) {
     const inputs = byId("duration-list").querySelectorAll(`[data-timer-field="${field}"]`);
     if (Array.from(inputs).some((input) => !input.validity.valid)) return null;
     const amount = inputs[0].valueAsNumber;
-    config[field] = field === "rounds" ? amount : amount * 60 + inputs[1].valueAsNumber;
+    config[field] = countFields.includes(field) ? amount : amount * 60 + inputs[1].valueAsNumber;
   }
   return config;
 }
 
 function refreshEditor() {
   const named = editor.kind !== "base";
-  text("editor-title", editor.kind === "new" || editor.kind === "copy" ? "New timer" : "Edit timer");
+  const creating = editor.kind === "new" || editor.kind === "copy";
+  text("editor-title", creating ? "New timer" : modeNames[editor.mode]);
   byId("preset-fields").hidden = !named;
   byId("preset-name").required = named;
   byId("preset-mode").disabled = editor.kind !== "new";
-  document.querySelector('[data-action="save-as"]').hidden = editor.kind === "new" || editor.kind === "copy";
+  document.querySelector('[data-action="save-as"]').hidden = creating;
   byId("editor-note").hidden = true;
+  const isStopwatch = editor.mode === "stopwatch";
+  byId("editor-total-wrap").hidden = isStopwatch;
   const config = editorConfig();
-  text("editor-total", validTimer(config) ? time(buildTimeline(config).total / 1000) : "—");
+  text("editor-total", !isStopwatch && validTimer(config, editor.mode) ? time(buildTimeline(config).total / 1000) : "—");
 }
 
 function openEditor(kind, preset) {
@@ -439,7 +530,7 @@ function showEditorNote(message) {
 function readEditorConfig() {
   if (!byId("timer-form").reportValidity()) return null;
   const config = editorConfig();
-  if (!validTimer(config)) {
+  if (!validTimer(config, editor.mode)) {
     showEditorNote("Set Work to at least one second.");
     byId("duration-list").querySelector('[data-timer-field="work"]').focus();
     return null;
@@ -481,7 +572,7 @@ function saveTimer(event) {
     const preset = { id: key, name, mode: editorMode, config };
     if (id) presets = presets.map((item) => item.id === id ? preset : item);
     else presets.push(preset);
-    if (editorReturn === "interval") {
+    if (editorReturn === "interval" || editorReturn === "stopwatch") {
       selected[editorMode] = key;
       if (interval?.mode === editorMode && !activeInterval()) resetInterval();
     }
@@ -500,7 +591,10 @@ function makePresetRow(preset) {
     <button type="button" class="button button-quiet button-icon" data-action="delete-preset"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>`;
   item.dataset.preset = preset.id;
   item.querySelector("strong").textContent = preset.name;
-  item.querySelector("small").textContent = `${modeNames[preset.mode]} · ${time(buildTimeline(preset.config).total / 1000)}`;
+  const detail = preset.mode === "stopwatch"
+    ? (preset.config.timeLap ? `lap cue every ${time(preset.config.timeLap)}` : "manual laps")
+    : time(buildTimeline(preset.config).total / 1000);
+  item.querySelector("small").textContent = `${modeNames[preset.mode]} · ${detail}`;
   item.querySelector('[data-action="edit-preset"]').setAttribute("aria-label", `Edit ${preset.name}`);
   item.querySelector('[data-action="delete-preset"]').setAttribute("aria-label", `Delete ${preset.name}`);
   return item;
@@ -525,14 +619,20 @@ function drawPresets() {
 }
 
 function loadPreset(preset) {
-  if (activeInterval()) {
+  const isStopwatch = preset.mode === "stopwatch";
+  if (isStopwatch && stopwatch.config) {
+    navigate("stopwatch");
+    announce("Reset the stopwatch before loading a different timer.");
+    return;
+  }
+  if (!isStopwatch && activeInterval()) {
     navigate(interval.mode);
     announce("Reset the active workout before loading a different timer.");
     return;
   }
   if (preset.id) selected[preset.mode] = preset.id;
   else delete selected[preset.mode];
-  resetInterval();
+  if (!isStopwatch) resetInterval();
   persist();
   navigate(preset.mode);
 }
@@ -576,6 +676,10 @@ function changeSetting(event) {
   if (["voice", "sound", "soundStyle", "volume"].includes(name)) {
     cues.stop();
     cues.prepare(settings);
+    if (stopwatch.startedAt !== null) {
+      stopwatchCues.stop();
+      stopwatchCues.prepare(stopwatchAudioSettings());
+    }
   }
   drawSettings();
   drawLaps();
@@ -601,6 +705,11 @@ const actions = {
   "stopwatch-main": toggleStopwatch,
   "stopwatch-lap": addLap,
   "stopwatch-reset": resetStopwatch,
+  "show-laps": () => swapView("laps"),
+  "close-laps": () => {
+    swapView("stopwatch");
+    byId("show-laps").focus({ preventScroll: true });
+  },
   "new-timer": () => openEditor("new"),
   "close-editor": closeEditor,
   "save-as": saveAs,
@@ -647,13 +756,14 @@ settingsForm.addEventListener("submit", (event) => event.preventDefault());
 window.addEventListener("hashchange", () => setMode(readMode()));
 const syncVisibility = () => {
   syncInterval(true);
-  drawStopwatch();
+  syncStopwatch();
   syncWake(true);
 };
 document.addEventListener("visibilitychange", syncVisibility);
 window.addEventListener("pageshow", syncVisibility);
 document.addEventListener("pointerdown", () => {
   if (interval?.startedAt != null) cues.prepare(settings);
+  if (stopwatch.startedAt !== null) stopwatchCues.prepare(stopwatchAudioSettings());
   syncWake(true);
 });
 

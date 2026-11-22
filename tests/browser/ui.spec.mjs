@@ -81,10 +81,21 @@ test("fits each timer with prompts, a long title, and saved laps", async ({ page
           const view = main.querySelector(".timer-view:not([hidden])");
           const bounds = main.getBoundingClientRect();
           const elements = view.querySelectorAll("button, .phase-header, .phase-time, .next-panel, .round-panel, .laps-panel");
+          function contentOverflows(element, rect) {
+            if (!(element instanceof HTMLButtonElement)) return element.scrollWidth > element.clientWidth + 1;
+            return Array.from(element.childNodes).some((node) => {
+              if (node instanceof Element && getComputedStyle(node).clipPath !== "none") return false;
+              const contents = document.createRange();
+              contents.selectNode(node);
+              return Array.from(contents.getClientRects()).some((part) =>
+                part.width > 1 && (part.left < rect.left - 1 || part.right > rect.right + 1)
+              );
+            });
+          }
           const clipped = Array.from(elements).filter((element) => {
             const rect = element.getBoundingClientRect();
             return rect.width > 0 && (rect.left < bounds.left - 1 || rect.right > bounds.right + 1 ||
-              rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1 || element.scrollWidth > element.clientWidth + 1);
+              rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1 || contentOverflows(element, rect));
           });
           return [
             ...(doc.scrollWidth > doc.clientWidth || doc.scrollHeight > doc.clientHeight ? ["page scrolls"] : []),

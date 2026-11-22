@@ -13,7 +13,7 @@
   <title>Cadence</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="./assets/icon-180.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png">
   <link rel="preload" href="./assets/bebas-neue-digits.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.mjs"></script>
@@ -211,8 +211,8 @@
         <form id="settings-form">
           <section class="list-panel settings-panel" aria-labelledby="cues-title">
             <div class="list-heading"><h2 id="cues-title">Workout cues</h2></div>
-            <label class="setting-row" for="sound"><span><strong>Interval sounds</strong><small>Play countdown bips and phase-change bells.</small></span><input class="switch" id="sound" name="sound" type="checkbox" role="switch"></label>
-            <label class="setting-row" for="sound-style"><span><strong>Sound style</strong></span><select id="sound-style" name="soundStyle"><option value="bell">Tubular bells</option><option value="beep">Hand chimes</option><option value="pulse">Soft chimes</option></select></label>
+            <label class="setting-row" for="sound"><span><strong>Interval sounds</strong><small>Play countdown bips and phase-change sounds.</small></span><input class="switch" id="sound" name="sound" type="checkbox" role="switch"></label>
+            <label class="setting-row" for="sound-style"><span><strong>Sound style</strong></span><select id="sound-style" name="soundStyle"><option value="bell">Tubular bells</option><option value="beep">Hand chimes</option><option value="pulse">Soft chimes</option><option value="sport">Sport / Military</option></select></label>
             <div class="setting-row volume-row">
               <label for="volume"><strong>Volume</strong><output id="volume-value" for="volume">65%</output></label>
               <input id="volume" name="volume" type="range" min="0" max="100" step="5">

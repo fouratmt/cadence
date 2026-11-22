@@ -108,6 +108,25 @@ test("plays a short countdown bip at the selected volume and respects mute", asy
   assert.equal(started.length, 1);
 });
 
+test("plays a long sport whistle before speech and three short whistles at finish", async (t) => {
+  const { started, stopped, requests } = installAudio(t);
+  const cues = new WorkoutCues();
+  const settings = { ...DEFAULT_SETTINGS, soundStyle: "sport", voice: true };
+  cues.prepare(settings);
+  assert.deepEqual(requests.slice(0, 2), ["./assets/sport-whistle.wav", "./assets/sport-whistle-long.wav"]);
+
+  await cues.play("work", settings);
+  const [start, speech] = started.splice(0);
+  assert.equal(start.node.buffer.file, "./assets/sport-whistle-long.wav");
+  assert.equal(speech.node.buffer.file, "./assets/voice-work.wav");
+  assert.equal(speech.when, start.when + start.node.buffer.duration);
+  assert.equal(stopped.length, 0);
+
+  await cues.play("finished", { ...settings, voice: false });
+  assert.deepEqual(started.map(({ node }) => node.buffer.file), Array(3).fill("./assets/sport-whistle.wav"));
+  assert.ok(started[0].when < started[1].when && started[1].when < started[2].when);
+});
+
 test("plays the bundled voice after the bell phrase and applies the selected volume", async (t) => {
   const { started, gains, requests, stopped } = installAudio(t);
   const cues = new WorkoutCues();

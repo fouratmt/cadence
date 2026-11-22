@@ -9,6 +9,7 @@ const files = [
   "./assets/icon-180.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/icon-maskable.png",
   "./assets/barlow-condensed-800.woff2", "./assets/bebas-neue-digits.woff2",
   "./assets/bell-hand.wav", "./assets/bell-tubular.wav",
+  "./assets/sport-whistle.wav", "./assets/sport-whistle-long.wav",
   "./assets/voice-prepare.wav", "./assets/voice-work.wav", "./assets/voice-rest.wav",
   "./assets/voice-cooldown.wav", "./assets/voice-finished.wav",
 ];

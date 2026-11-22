@@ -13,7 +13,12 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
   const chromium = /Chrome|Chromium|Edg/i.test(agent);
   const desktopSafari = /Safari/i.test(agent) && !chromium && !appleMobile;
   const serviceWorker = navigator.serviceWorker;
-  let controller = serviceWorker?.controller;
+  const workerUrl = new URL("./sw.js", import.meta.url).href;
+  const cadenceController = () => {
+    const worker = serviceWorker?.controller;
+    return worker?.scriptURL === workerUrl ? worker : null;
+  };
+  let controller = cadenceController();
   let registration;
   let installPrompt;
   let installed = false;
@@ -129,7 +134,7 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
       drawInstall();
     }
     serviceWorker.addEventListener("controllerchange", () => {
-      const next = serviceWorker.controller;
+      const next = cadenceController();
       if (!next || next === controller) return;
       if (controller) updatedController = next;
       controller = next;
@@ -141,7 +146,7 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
     });
 
     try {
-      registration = await serviceWorker.register("./sw.js", { updateViaCache: "none" });
+      registration = await serviceWorker.register(workerUrl, { updateViaCache: "none" });
       if (registration.active) offlineStatus = "Available offline";
       const watchInstalling = () => {
         const worker = registration.installing;
@@ -158,7 +163,7 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
       window.addEventListener("online", checkForUpdate);
       window.setInterval(checkForUpdate, 15 * 60_000);
     } catch {
-      if (!serviceWorker.controller) offlineStatus = "Offline access unavailable";
+      if (!cadenceController()) offlineStatus = "Offline access unavailable";
       drawInstall();
     }
   }

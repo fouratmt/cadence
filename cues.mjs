@@ -7,15 +7,24 @@ const BELL_PHRASES = {
   finished: [[0, -5, .75], [.17, 0, .83], [.35, 4, .79], [.56, 0, .35], [.56, 7, .94]],
 };
 
+const SPORT_PHRASES = {
+  prepare: [[0, 0, .7], [.2, 0, .9]],
+  work: [[0, 0, 1]],
+  rest: [[0, -3, .83]],
+  cooldown: [[0, 0, .67], [.29, -4, .83]],
+  finished: [[0, 0, .79], [.2, 0, .86], [.4, 2, 1]],
+};
+
 // Keep the style IDs used in saved preferences.
-const BELL_STYLES = {
+const SOUND_STYLES = {
   bell: { file: "bell-tubular", transpose: 5, gain: .52 },
   beep: { file: "bell-hand", transpose: 0, gain: .72 },
   pulse: { file: "bell-hand", transpose: -5, gain: .51 },
+  sport: { file: "sport-whistle", workFile: "sport-whistle-long", phrases: SPORT_PHRASES, transpose: 0, gain: .78 },
 };
 
-function bellStyle(name) {
-  return Object.hasOwn(BELL_STYLES, name) ? BELL_STYLES[name] : BELL_STYLES.bell;
+function soundStyle(name) {
+  return Object.hasOwn(SOUND_STYLES, name) ? SOUND_STYLES[name] : SOUND_STYLES.bell;
 }
 
 export class WorkoutCues {
@@ -33,7 +42,11 @@ export class WorkoutCues {
     }
 
     if (this.#context.state !== "running") this.#context.resume().catch(() => {});
-    if (settings.sound) this.#load(bellStyle(settings.soundStyle).file);
+    if (settings.sound) {
+      const { file, workFile } = soundStyle(settings.soundStyle);
+      this.#load(file);
+      if (workFile) this.#load(workFile);
+    }
     if (settings.voice) {
       for (const phase of Object.keys(BELL_PHRASES)) this.#load(`voice-${phase}`);
     }
@@ -112,21 +125,22 @@ export class WorkoutCues {
 
     const context = this.#context;
     const volume = settings.volume / 100;
-    const style = bellStyle(settings.soundStyle);
+    const style = soundStyle(settings.soundStyle);
     const cue = phase === "cycleRest" ? "rest" : phase;
+    const workFile = cue === "work" ? style.workFile : undefined;
     const voice = settings.voice ? this.#load(`voice-${cue}`) : undefined;
-    const bell = settings.sound ? await this.#load(style.file) : undefined;
+    const clip = settings.sound ? await this.#load(workFile ?? style.file) : undefined;
     if (sequence !== this.#sequence || context.state !== "running") return;
 
     let speechStart = context.currentTime;
-    if (bell) {
+    if (clip) {
       const start = context.currentTime;
-      const notes = BELL_PHRASES[cue];
-      const speechOffset = notes.at(-1)[0] + .32;
+      const notes = (style.phrases ?? BELL_PHRASES)[cue];
+      const speechOffset = Math.max(notes.at(-1)[0] + .32, workFile ? clip.duration : 0);
       for (const [offset, pitch, level] of notes) {
         const rate = 2 ** ((pitch + style.transpose) / 12);
         const ring = voice ? speechOffset - offset : Infinity;
-        this.#start(bell, start + offset, volume * style.gain * level, rate, ring);
+        this.#start(clip, start + offset, volume * style.gain * level, rate, ring);
       }
       speechStart = start + speechOffset;
     }

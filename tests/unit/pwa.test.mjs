@@ -93,10 +93,12 @@ test("manifest configures a standalone app that can be hosted in a repository su
   assert.equal(manifest.name, "Cadence");
   assert.equal(manifest.short_name, "Cadence");
   assert.equal(manifest.display, "standalone");
-  assert.equal(manifest.id, "./");
+  assert.equal(manifest.id, "/cadence/");
   assert.equal(manifest.scope, "./");
   assert.equal(manifest.start_url, "./");
-  assert.equal(new URL(manifest.start_url, `${scope}manifest.webmanifest`).href, scope);
+  const startUrl = new URL(manifest.start_url, `${scope}manifest.webmanifest`);
+  assert.equal(startUrl.href, scope);
+  assert.equal(new URL(manifest.id, startUrl.origin).href, scope);
 });
 
 test("manifest points to usable PNG icons with the declared sizes and a maskable icon", async () => {

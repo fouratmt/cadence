@@ -23,15 +23,16 @@ async function serve(request, response, overrides) {
     response.writeHead(204).end();
     return;
   }
-  const file = path.slice(scope.length) || "index.html";
+  const insideCadence = path.startsWith(scope);
+  const file = insideCadence ? path.slice(scope.length) || "index.html" : path;
   const type = contentTypes[extname(file)];
-  if (!path.startsWith(scope) || !type) {
+  if ((!insideCadence && !overrides.has(file)) || !type) {
     response.writeHead(404).end();
     return;
   }
 
   try {
-    const bytes = overrides.get(file) ?? await readFile(new URL(file, root));
+    const bytes = await (overrides.get(file) ?? readFile(new URL(file, root)));
     response.writeHead(200, { "Content-Type": type }).end(bytes);
   } catch (error) {
     response.writeHead(error.code === "ENOENT" ? 404 : 500).end();

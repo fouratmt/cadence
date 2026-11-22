@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "./fixtures.mjs";
 import { startSite } from "./site-server.mjs";
 import "../../version.js";
@@ -34,22 +35,26 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
         "./assets/voice-work.wav",
         "./assets/bell-hand.wav",
         "./assets/bell-tubular.wav",
+        "./assets/sport-whistle.wav",
+        "./assets/sport-whistle-long.wav",
       ];
       return Promise.all(paths.map(async (path) => {
         const response = await fetch(path);
         return response.ok && (await response.arrayBuffer()).byteLength > 0;
       }));
     });
-    expect(assets).toEqual([true, true, true, true, true, true]);
+    expect(assets).toEqual([true, true, true, true, true, true, true, true]);
     const durations = await page.evaluate(async () => {
       const audio = new OfflineAudioContext(1, 1, 44_100);
-      const files = ["voice-work", "bell-hand", "bell-tubular"];
-      return Promise.all(files.map(async (file) => {
+      const files = ["voice-work", "bell-hand", "bell-tubular", "sport-whistle", "sport-whistle-long"];
+      return Object.fromEntries(await Promise.all(files.map(async (file) => {
         const response = await fetch(`./assets/${file}.wav`);
-        return (await audio.decodeAudioData(await response.arrayBuffer())).duration;
-      }));
+        return [file, (await audio.decodeAudioData(await response.arrayBuffer())).duration];
+      })));
     });
-    expect(durations.every((duration) => duration > 0)).toBe(true);
+    expect(Object.values(durations).every((duration) => duration > 0)).toBe(true);
+    expect(durations["sport-whistle"]).toBeLessThan(.25);
+    expect(durations["sport-whistle-long"]).toBeGreaterThan(.65);
 
     const button = (name) => page.getByRole("button", { name, exact: true });
     await button("New timer").click();
@@ -57,8 +62,15 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
     await button("Save timer").click();
     await page.getByRole("button", { name: /^Offline practice Rounds/ }).click();
     await expect(page.getByRole("heading", { name: "Offline practice" })).toBeVisible();
+    await button("Settings").click();
+    const style = page.getByLabel("Sound style");
+    await style.selectOption({ label: "Sport / Military" });
+    await button("Preview").click();
+    await expect.poll(() => page.evaluate(() => window.playedAudio.length)).toBe(1);
+    expect(await page.evaluate(() => window.playedAudio[0])).toBeGreaterThan(.65);
+    await button("Back").click();
     await button("Start").click();
-    await expect.poll(() => page.evaluate(() => window.playedAudio.length)).toBe(3);
+    await expect.poll(() => page.evaluate(() => window.playedAudio.length)).toBe(2);
     await button("Skip interval").click();
     await expect(page.locator("#phase-name")).toHaveText("Rest");
     await button("Pause").click();
@@ -66,12 +78,14 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
     await expect(page.locator("#phase-name")).toHaveText("Rest");
     await expect(button("Resume")).toBeEnabled();
     await expect(page.getByRole("heading", { name: "Offline practice" })).toBeVisible();
+    await button("Settings").click();
+    await expect(style).toHaveValue("sport");
   } finally {
     await site.close();
   }
 });
 
-test("each bell phrase starts promptly and stays below clipping at full volume", async ({ page }) => {
+test("each workout cue starts promptly and stays below clipping at full volume", async ({ page }) => {
   await page.goto("./");
   const mixes = await page.evaluate(async () => {
     const { WorkoutCues } = await import("./cues.mjs");
@@ -87,7 +101,7 @@ test("each bell phrase starts promptly and stays below clipping at full volume",
     };
 
     const results = [];
-    for (const soundStyle of ["bell", "beep", "pulse"]) {
+    for (const soundStyle of ["bell", "beep", "pulse", "sport"]) {
       for (const phase of Object.keys(PHASE_NAMES)) {
         const cues = new WorkoutCues();
         const settings = { ...DEFAULT_SETTINGS, volume: 100, soundStyle };
@@ -102,7 +116,7 @@ test("each bell phrase starts promptly and stays below clipping at full volume",
     return results;
   });
 
-  expect(mixes).toHaveLength(18);
+  expect(mixes).toHaveLength(24);
   for (const { phase, soundStyle, peak, firstNote, sampleRate } of mixes) {
     const cue = `${soundStyle} ${phase}`;
     expect(peak, cue).toBeGreaterThan(.05);
@@ -111,14 +125,52 @@ test("each bell phrase starts promptly and stays below clipping at full volume",
   }
 });
 
-test("meets Chromium installability checks", async ({ page, context, browserName }) => {
+test("Chromium identifies Cadence by its subpath and resolves its install icons", async ({ page, context, browserName, site }) => {
   test.skip(browserName !== "chromium", "Chromium DevTools exposes these diagnostics");
   await page.goto("./");
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   const devtools = await context.newCDPSession(page);
   await devtools.send("Page.enable");
+  const { url, manifest } = await devtools.send("Page.getAppManifest");
+  expect(url).toBe(`${site.url}manifest.webmanifest`);
+  expect(manifest).toMatchObject({ id: site.url, startUrl: site.url, scope: site.url });
+  expect(manifest.icons.map(({ url: icon }) => icon)).toEqual([
+    `${site.url}assets/icon-192.png`, `${site.url}assets/icon-512.png`, `${site.url}assets/icon-maskable.png`,
+  ]);
+  expect(await page.locator('link[rel="apple-touch-icon"]').evaluate((link) => link.href))
+    .toBe(`${site.url}assets/icon-180.png`);
   const { installabilityErrors } = await devtools.send("Page.getInstallabilityErrors");
   expect(installabilityErrors.filter(({ errorId }) => errorId !== "in-incognito")).toEqual([]);
+});
+
+test("waits for Cadence's own worker on a site with a root service worker", async ({ page }) => {
+  const worker = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
+  const { promise, resolve } = Promise.withResolvers();
+  const site = await startSite(new Map([
+    ["/main.html", "<title>Main app</title>"],
+    ["/main-worker.js", `
+      self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()));
+      self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+    `],
+    ["sw.js", promise],
+  ]));
+  try {
+    await page.goto(new URL("/main.html", site.url).href);
+    await page.evaluate(() => navigator.serviceWorker.register("/main-worker.js"));
+    await page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/main-worker.js"));
+
+    await page.goto(`${site.url}#more`);
+    await expect(page.locator("#app-version")).toHaveText(`v${version}`);
+    await expect(page.locator("#offline-status")).toHaveText("Preparing offline access");
+    resolve(worker);
+
+    await page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/cadence/sw.js"));
+    await expect(page.locator("#offline-status")).toHaveText("Available offline");
+    await expect(page.getByRole("complementary", { name: "Update available" })).toBeHidden();
+  } finally {
+    resolve(worker);
+    await site.close();
+  }
 });
 
 test("prompts iOS visitors with install steps and remembers their choice", async ({ page }) => {

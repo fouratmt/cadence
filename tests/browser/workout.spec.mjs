@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures.mjs";
+import { expect, test, trackScheduledAudio } from "./fixtures.mjs";
 
 async function openWithClock(page, path = "./") {
   const start = new Date("2026-01-01T12:00:00Z");
@@ -7,22 +7,9 @@ async function openWithClock(page, path = "./") {
   await page.clock.pauseAt(new Date(start.getTime() + 60_000));
 }
 
-async function captureAudio(page) {
-  await page.addInitScript(() => {
-    window.workoutAudio = [];
-    for (const [prototype, kind] of [[OscillatorNode.prototype, "bip"], [AudioBufferSourceNode.prototype, "bell"]]) {
-      const start = prototype.start;
-      prototype.start = function (...args) {
-        window.workoutAudio.push({ kind, time: Date.now() });
-        return start.apply(this, args);
-      };
-    }
-  });
-  return () => page.evaluate(() => window.workoutAudio);
-}
-
 test("sounds one bip at 3, 2, and 1 seconds before the next phase bell", async ({ page }) => {
-  const audio = await captureAudio(page);
+  const scheduled = await trackScheduledAudio(page);
+  const audio = async () => (await scheduled()).map(({ kind, time }) => ({ kind, time }));
   await openWithClock(page);
   const button = (name) => page.getByRole("button", { name, exact: true });
   await button("Start").click();
@@ -215,7 +202,7 @@ test("records split and total stopwatch times, restores laps after reload, and r
 });
 
 test("counts down before starting the stopwatch and rings at each timed lap", async ({ page }) => {
-  const audio = await captureAudio(page);
+  const audio = await trackScheduledAudio(page);
   await openWithClock(page, "./#stopwatch");
   const button = (name) => page.getByRole("button", { name, exact: true });
   const time = page.getByRole("timer");

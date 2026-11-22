@@ -580,11 +580,17 @@ dialog::backdrop { background: rgb(0 0 0 / .7); }
   .tab-bar a { flex-direction: row; min-height: 44px; }
 }
 
-@media (max-height: 380px) and (orientation: landscape) {
+@media (max-height: 380px) and (orientation: landscape),
+       (max-width: 365px) and (max-height: 550px) and (orientation: portrait) {
   .laps-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; padding: 8px; }
   #show-laps { min-width: 44px; padding-inline: 0; }
   #show-laps .icon { display: block; }
   #show-laps span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+@media (max-width: 365px) and (max-height: 550px) and (orientation: portrait) {
+  #stopwatch-view .heading-detail { display: none; }
+  .laps-panel dl { margin-block-start: 3px; }
 }
 
 @media (max-height: 310px) and (orientation: landscape) {

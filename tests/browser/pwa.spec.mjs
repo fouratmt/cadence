@@ -1,19 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "./fixtures.mjs";
+import { expect, test, trackScheduledAudio } from "./fixtures.mjs";
 import { startSite } from "./site-server.mjs";
 import "../../version.js";
 
 const version = globalThis.CADENCE_VERSION;
 
 test("reloads a subpath with the server stopped and runs an offline workout", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.playedAudio = [];
-    const start = AudioBufferSourceNode.prototype.start;
-    AudioBufferSourceNode.prototype.start = function (...args) {
-      if (this.buffer) window.playedAudio.push(this.buffer.duration);
-      return start.apply(this, args);
-    };
-  });
+  const audio = await trackScheduledAudio(page);
   const site = await startSite();
   try {
     const url = new URL("?preview=1#more", site.url);
@@ -66,11 +59,11 @@ test("reloads a subpath with the server stopped and runs an offline workout", as
     const style = page.getByLabel("Sound style");
     await style.selectOption({ label: "Sport / Military" });
     await button("Preview").click();
-    await expect.poll(() => page.evaluate(() => window.playedAudio.length)).toBe(1);
-    expect(await page.evaluate(() => window.playedAudio[0])).toBeGreaterThan(.65);
+    await expect.poll(async () => (await audio()).length).toBe(1);
+    expect((await audio())[0].duration).toBeGreaterThan(.65);
     await button("Back").click();
     await button("Start").click();
-    await expect.poll(() => page.evaluate(() => window.playedAudio.length)).toBe(2);
+    await expect.poll(async () => (await audio()).length).toBe(2);
     await button("Skip interval").click();
     await expect(page.locator("#phase-name")).toHaveText("Rest");
     await button("Pause").click();

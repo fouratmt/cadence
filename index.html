@@ -12,6 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./assets/icon-180.png">
+  <link rel="preload" href="./assets/bebas-neue-digits.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.mjs"></script>
 </head>
@@ -68,13 +69,13 @@
           <p>A workout is already in progress.</p>
           <button class="button button-quiet" type="button" data-action="return-workout">Return to workout</button>
         </div>
-        <div class="console">
+        <div class="console interval-console">
           <div id="phase-panel" class="phase-panel" data-phase="work">
             <div class="phase-header">
               <p id="phase-name" class="phase-name" aria-live="polite">Work</p>
               <span id="phase-status" class="phase-status">Ready</span>
             </div>
-            <div id="phase-time" class="phase-time" role="timer">01:00</div>
+            <div id="phase-time" class="phase-time interval-time" role="timer">01:00</div>
             <div class="phase-track" aria-hidden="true"><span id="phase-fill"></span></div>
           </div>
           <div class="console-rail">

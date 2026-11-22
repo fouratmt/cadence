@@ -1,0 +1,16 @@
+{
+  "name": "sports-timer",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "axe-core": "4.14.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

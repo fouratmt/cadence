@@ -1,10 +1,10 @@
 const prefix = `sports-timer:${self.registration.scope}:`;
-const cacheName = `${prefix}v2`;
+const cacheName = `${prefix}v3`;
 const files = [
   "./index.html", "./styles.css", "./app.mjs", "./timer.mjs", "./cues.mjs",
   "./manifest.webmanifest", "./assets/icon.svg",
   "./assets/icon-180.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/icon-maskable.png",
-  "./assets/barlow-condensed-800.woff2",
+  "./assets/barlow-condensed-800.woff2", "./assets/bebas-neue-digits.woff2",
   "./assets/voice-prepare.wav", "./assets/voice-work.wav", "./assets/voice-rest.wav",
   "./assets/voice-cooldown.wav", "./assets/voice-finished.wav",
 ];

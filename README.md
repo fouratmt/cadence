@@ -4,17 +4,37 @@ A mobile-first workout timer for Rounds, Tabata, and stopwatch laps. Install it 
 
 ## Run locally
 
-From the project folder, run:
+With Just and uv installed, run this from the project folder. uv manages the Python interpreter for the local server.
 
 ```sh
-python3 -m http.server 8000 --bind 127.0.0.1
+just dev
 ```
 
-Open [localhost port 8000](http://127.0.0.1:8000/). The app has no build step, runtime dependencies, or backend. Use localhost for local service worker testing and HTTPS when serving to a phone.
+Open the app on your computer at localhost on port 8000. On a phone connected to the same local network, open your computer’s local IP address on port 8000, for example `http://192.168.1.10:8000/`. Run `just dev 8080` to change the port or `just dev 8000 127.0.0.1` to serve only on your computer. [Open the local app](http://127.0.0.1:8000/)
+
+The app has no build step, runtime dependencies, or backend. Local network HTTP works for testing the layout and timers on a phone. Use a trusted HTTPS URL on the phone to test offline caching and screen wake lock.
+
+Run `just check` with Node.js and uv to check JavaScript syntax and validate the manifest JSON. Run `just` to list the available recipes.
+
+## Run tests
+
+Use Node.js 22 or newer. Run `just test-unit` for the timer, cues, wake-lock, and service worker unit tests. These use Node’s built-in test runner.
+
+To set up the full suite, install the test dependencies and browsers from the project folder.
+
+```sh
+npm ci
+npx playwright install
+just test
+```
+
+Run `just test-browser` for the browser suite on its own, or `npm run test:browser -- --project=webkit` to target one engine. Browser tests start their own loopback servers and cover full workout flows, preset storage, offline reloads after the server stops, keyboard access, automated accessibility, and countdown layout. GitHub Actions runs the suites on pushes to `main` and pull requests, and saves browser traces when tests fail. [Playwright browser setup](https://playwright.dev/docs/browsers)
 
 ## Publish on GitHub Pages
 
-Put the project in a GitHub repository. In **Settings → Pages**, choose **Deploy from a branch**, select your publishing branch and **/ (root)**, then save. The published URL appears in Pages after deployment. Relative asset URLs and a relative service worker scope support repository URLs such as `https://username.github.io/sports-timer/`. The included `.nojekyll` file serves the project as static assets. [GitHub Pages publishing documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. Private repositories require a GitHub plan that supports Pages, and the published site can be public even when the source repository is private. [GitHub Pages publishing documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+
+The **Test and deploy** workflow runs the unit and browser suites before publishing the static app on pushes to `main`. Pull requests run the tests. To redeploy manually, run the workflow from `main` in the **Actions** tab. The site URL appears in the `github-pages` deployment and in Pages settings. Relative assets and service worker scope support repository URLs such as `https://username.github.io/sports-timer/`.
 
 When shipping changes to cached files, bump the version in `sw.js` and update its asset list if needed. A pending update takes over after the old app windows close. Open the app once online and wait for **More → Available offline** before going offline.
 
@@ -29,6 +49,7 @@ When shipping changes to cached files, bump the version in `sw.js` and update it
 ### Implemented
 
 - Rounds and Tabata with editable preparation, work, rest, round count, and cooldown. Rest runs between work rounds and cooldown follows the last round. The default Tabata takes four minutes.
+- Edge-to-edge interval countdown on phones in portrait, with tall, condensed digits and a larger next-phase preview.
 - Start, pause, resume, skip, reset, and automatic phase changes. The countdown recalculates from elapsed time after a browser interruption. Session state survives a reload in the same tab or app window.
 - Stopwatch with elapsed time, individual lap splits, and cumulative lap times.
 - Create, edit, copy, delete, and load named timers in **More**. Presets and settings are stored on the device.
@@ -51,4 +72,6 @@ When shipping changes to cached files, bump the version in `sw.js` and update it
 - Evaluate the Audio Session API for OS-managed music ducking on browsers that support it. [Audio Session API](https://developer.mozilla.org/en-US/docs/Web/API/AudioSession/type)
 - Physical-device verification for install flows, low-power wake lock behavior, and cue playback on iOS and Android.
 
-Barlow Condensed is bundled under the [SIL Open Font License](./assets/OFL-Barlow.txt). The short English cues were generated using [meSpeak](https://www.masswerk.at/mespeak/) and are bundled as audio files.
+Barlow Condensed and the Bebas Neue countdown digits are bundled under the SIL Open Font License. [Barlow Condensed license](./assets/OFL-Barlow.txt) · [Bebas Neue license](./assets/OFL-Bebas-Neue.txt)
+
+The short English cues were generated using meSpeak and are bundled as audio files. [meSpeak](https://www.masswerk.at/mespeak/)

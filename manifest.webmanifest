@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Sports Timer",
-  "short_name": "Sports Timer",
+  "name": "Cadence",
+  "short_name": "Cadence",
   "description": "Offline rounds, Tabata and stopwatch laps.",
   "lang": "en",
   "start_url": "./",

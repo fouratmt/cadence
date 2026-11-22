@@ -5,8 +5,9 @@ import { runInNewContext } from "node:vm";
 import { PHASE_NAMES } from "../../timer.mjs";
 
 const root = new URL("../../", import.meta.url);
-const scope = "https://example.test/sports-timer/";
-const cachePrefix = `sports-timer:${scope}:`;
+const scope = "https://example.test/cadence/";
+const cachePrefix = `cadence:${scope}:`;
+const previousCache = `sports-timer:${scope}:v3`;
 const code = await readFile(new URL("sw.js", root), "utf8");
 const manifest = JSON.parse(await readFile(new URL("manifest.webmanifest", root), "utf8"));
 
@@ -40,7 +41,7 @@ function worker() {
         return cache;
       },
       async keys() {
-        return [state.cacheName, `${cachePrefix}old`, "another-app-cache"];
+        return [state.cacheName, `${cachePrefix}old`, previousCache, "sports-timer:https://example.test/another/:v3", "another-app-cache"];
       },
       async delete(name) {
         deleted.push(name);
@@ -77,6 +78,8 @@ function worker() {
 }
 
 test("manifest configures a standalone app that can be hosted in a repository subpath", () => {
+  assert.equal(manifest.name, "Cadence");
+  assert.equal(manifest.short_name, "Cadence");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.id, "./");
   assert.equal(manifest.scope, "./");
@@ -129,7 +132,7 @@ test("activation removes only stale caches owned by this app", async () => {
   const serviceWorker = worker();
   await serviceWorker.install();
   assert.equal(await serviceWorker.activate(), true);
-  assert.deepEqual(serviceWorker.deleted, [`${cachePrefix}old`]);
+  assert.deepEqual(serviceWorker.deleted, [`${cachePrefix}old`, previousCache]);
 });
 
 test("serves cached navigation at the repository root with a query and hash", async () => {

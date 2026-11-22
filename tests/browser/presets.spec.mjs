@@ -86,3 +86,31 @@ test("restores preferences and uses the chosen time format and colors", async ({
   await expect(page.getByLabel("Time format")).toHaveValue("compact");
   await expect(page.getByLabel("Sound style")).toHaveValue("bell");
 });
+
+test("migrates existing presets, preferences, and a paused workout to Cadence", async ({ page }) => {
+  await page.addInitScript(() => {
+    const config = { prepare: 0, work: 30, rest: 10, rounds: 2, cooldown: 0 };
+    localStorage.setItem("sports-timer:v1", JSON.stringify({
+      settings: { timeFormat: "compact" },
+      presets: [{ id: "saved", name: "Hill repeats", mode: "rounds", config }],
+    }));
+    sessionStorage.setItem("sports-timer:session:v1", JSON.stringify({
+      interval: { mode: "rounds", name: "Hill repeats", config, elapsed: 31_000, startedAt: null },
+    }));
+  });
+  await page.goto("./");
+  await expect(page).toHaveTitle("Cadence");
+  await expect(page.getByRole("heading", { name: "Hill repeats", exact: true })).toBeVisible();
+  await expect(page.locator("#phase-name")).toHaveText("Rest");
+  await expect(page.locator("#phase-time")).toHaveText("0:09");
+  await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Time format").selectOption("padded");
+  await page.reload();
+  await expect(page.locator("#phase-time")).toHaveText("00:09");
+
+  await page.getByRole("link", { name: "More", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Hill repeats Rounds/ })).toBeVisible();
+  expect(await page.evaluate(() => Boolean(sessionStorage.getItem("cadence:session:v1")))).toBe(true);
+});

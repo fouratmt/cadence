@@ -1,5 +1,6 @@
-const prefix = `sports-timer:${self.registration.scope}:`;
-const cacheName = `${prefix}v3`;
+const prefix = `cadence:${self.registration.scope}:`;
+const previousPrefix = `sports-timer:${self.registration.scope}:`;
+const cacheName = `${prefix}v4`;
 const files = [
   "./index.html", "./styles.css", "./app.mjs", "./timer.mjs", "./cues.mjs",
   "./manifest.webmanifest", "./assets/icon.svg",
@@ -20,7 +21,8 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const name of await caches.keys()) {
-      if (name.startsWith(prefix) && name !== cacheName) await caches.delete(name);
+      const owned = name.startsWith(prefix) || name.startsWith(previousPrefix);
+      if (owned && name !== cacheName) await caches.delete(name);
     }
     await self.clients.claim();
   })());

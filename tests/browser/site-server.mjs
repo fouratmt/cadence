@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { extname } from "node:path";
 
 const root = new URL("../../", import.meta.url);
-const scope = "/sports-timer/";
+const scope = "/cadence/";
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",

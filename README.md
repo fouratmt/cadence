@@ -1,4 +1,4 @@
-# Sports Timer
+# Cadence
 
 A mobile-first workout timer for Rounds, Tabata, and stopwatch laps. Install it from your browser and use it offline after it has finished preparing on the first visit.
 
@@ -34,7 +34,7 @@ Run `just test-browser` for the browser suite on its own, or `npm run test:brows
 
 Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. Private repositories require a GitHub plan that supports Pages, and the published site can be public even when the source repository is private. [GitHub Pages publishing documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 
-The **Test and deploy** workflow runs the unit and browser suites before publishing the static app on pushes to `main`. Pull requests run the tests. To redeploy manually, run the workflow from `main` in the **Actions** tab. The site URL appears in the `github-pages` deployment and in Pages settings. Relative assets and service worker scope support repository URLs such as `https://username.github.io/sports-timer/`.
+The **Test and deploy** workflow runs the unit and browser suites before publishing the static app on pushes to `main`. Pull requests run the tests. To redeploy manually, run the workflow from `main` in the **Actions** tab. The site URL appears in the `github-pages` deployment and in Pages settings. Relative assets and service worker scope support repository URLs such as `https://username.github.io/cadence/`.
 
 When shipping changes to cached files, bump the version in `sw.js` and update its asset list if needed. A pending update takes over after the old app windows close. Open the app once online and wait for **More → Available offline** before going offline.
 

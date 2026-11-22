@@ -7,8 +7,8 @@ import { ScreenAwake, WorkoutCues } from "./cues.mjs";
 const byId = (id) => document.getElementById(id);
 const modes = ["rounds", "tabata", "stopwatch", "more"];
 const modeNames = { rounds: "Rounds", tabata: "Tabata" };
-const storageKey = "sports-timer:v1";
-const sessionKey = "sports-timer:session:v1";
+const storageKey = "cadence:v1";
+const sessionKey = "cadence:session:v1";
 const fields = {
   prepare: "Prepare",
   work: "Work",
@@ -17,9 +17,17 @@ const fields = {
   cooldown: "Cooldown",
 };
 
-function read(storageName, key) {
+function read(storageName, key, previousKey) {
   try {
-    return JSON.parse(window[storageName].getItem(key)) ?? {};
+    const storage = window[storageName];
+    const saved = storage.getItem(key);
+    if (saved !== null) return JSON.parse(saved) ?? {};
+
+    const previous = storage.getItem(previousKey);
+    if (previous === null) return {};
+    const data = JSON.parse(previous) ?? {};
+    write(storageName, key, data);
+    return data;
   } catch {
     return {};
   }
@@ -34,7 +42,7 @@ function write(storageName, key, data) {
   }
 }
 
-const stored = read("localStorage", storageKey);
+const stored = read("localStorage", storageKey, "sports-timer:v1");
 const settings = { ...DEFAULT_SETTINGS, ...stored.settings };
 const baseTimers = Object.fromEntries(Object.entries(DEFAULT_TIMERS).map(([key, config]) =>
   [key, validTimer(stored.baseTimers?.[key]) ? stored.baseTimers[key] : config]
@@ -51,7 +59,7 @@ function persist() {
   }
 }
 
-const savedSession = read("sessionStorage", sessionKey);
+const savedSession = read("sessionStorage", sessionKey, "sports-timer:session:v1");
 const savedInterval = savedSession.interval;
 let interval = Object.hasOwn(modeNames, savedInterval?.mode) && validTimer(savedInterval.config)
   ? { ...savedInterval, timeline: buildTimeline(savedInterval.config) }
@@ -582,12 +590,12 @@ function drawInstall() {
   const firefox = /Firefox/i.test(navigator.userAgent);
   const desktopSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|Edg/i.test(navigator.userAgent);
   let steps = "Look for Install app or Add to Home Screen in your browser menu.";
-  if (standalone) steps = "Sports Timer is open as an installed app.";
+  if (standalone) steps = "Cadence is open as an installed app.";
   else if (appleMobile) steps = "Open the browser’s Share menu and choose Add to Home Screen. Leave Open as Web App enabled if shown.";
-  else if (android && firefox) steps = "Open the Firefox menu, tap Install, then add Sports Timer to your Home Screen.";
+  else if (android && firefox) steps = "Open the Firefox menu, tap Install, then add Cadence to your Home Screen.";
   else if (android) steps = "Open the Chrome menu and select Install and create shortcut, then Install. Some versions show Add to Home screen.";
   else if (desktopSafari) steps = "In Safari, choose File → Add to Dock.";
-  else if (installPrompt) steps = "Install Sports Timer to open it in its own window.";
+  else if (installPrompt) steps = "Install Cadence to open it in its own window.";
 
   text("install-steps", steps);
   byId("install-button").hidden = standalone || !installPrompt;
@@ -601,7 +609,7 @@ async function installApp() {
   try {
     await prompt.prompt();
   } catch {
-    announce("Use your browser menu to install Sports Timer.");
+    announce("Use your browser menu to install Cadence.");
   }
   drawInstall();
 }

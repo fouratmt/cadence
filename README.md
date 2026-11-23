@@ -28,13 +28,13 @@ npx playwright install
 just test
 ```
 
-Run `just test-browser` for the browser suite on its own, or `npm run test:browser -- --project=webkit` to target one engine. Browser tests start their own loopback servers and cover full workout flows, preset storage, offline reloads after the server stops, keyboard access, automated accessibility, and countdown layout. GitHub Actions runs the suites on pushes to `main` and pull requests, and saves browser traces when tests fail. [Playwright browser setup](https://playwright.dev/docs/browsers)
+Run `just test-browser` for the browser suite on its own, or `npm run test:browser -- --project=webkit` to target one engine. Browser tests start their own loopback servers and cover full workout flows, preset storage, offline reloads after the server stops, keyboard access, automated accessibility, and countdown layout. Service workers are enabled in `pwa.spec.mjs`, which covers installation, updates, and an offline workout. Failed tests save screenshots. GitHub Actions captures a trace on the first retry and flags flaky tests as failures. For a local trace, add `--trace=on` to the targeted browser command. [Playwright browser setup](https://playwright.dev/docs/browsers)
 
 ## Publish on GitHub Pages
 
 Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. Private repositories require a GitHub plan that supports Pages, and the published site can be public even when the source repository is private. [GitHub Pages publishing documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 
-The **Test and deploy** workflow runs the unit and browser suites before publishing the static app on pushes to `main`. Pull requests run the tests. To redeploy manually, run the workflow from `main` in the **Actions** tab. The site URL appears in the `github-pages` deployment and in Pages settings. Relative assets and service worker scope support repository URLs such as `https://username.github.io/cadence/`.
+The **Test and deploy** workflow runs Chromium, Firefox, and WebKit in parallel and runs unit tests in the Chromium job. Publishing on pushes to `main` requires all three jobs to pass. Pull requests run the same tests and cancel superseded runs. To redeploy manually, run the workflow from `main` in the **Actions** tab. The site URL appears in the `github-pages` deployment and in Pages settings. Relative assets and service worker scope support repository URLs such as `https://username.github.io/cadence/`.
 
 When hosting Cadence at `https://fourat.dev/cadence/`, redirect `/cadence` to `/cadence/` so the page's relative manifest and icon links resolve inside Cadence. The manifest uses the stable ID `/cadence/`, with its launch URL and scope pointing to the directory containing the manifest. Its PNG icons and the page's Apple touch icon are served from Cadence's own `assets/` directory. [Web App Manifest specification](https://www.w3.org/TR/appmanifest/#id-member) · [WebKit home screen icons](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/#new-fallback-icon)
 

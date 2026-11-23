@@ -11,12 +11,17 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
+    name: Tests (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -25,12 +30,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:unit
-      - run: npx playwright install --with-deps
-      - run: npm run test:browser
+        if: matrix.browser == 'chromium'
+      - name: Install Chromium headless shell
+        if: matrix.browser == 'chromium'
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Install ${{ matrix.browser }}
+        if: matrix.browser != 'chromium'
+        run: npx playwright install --with-deps "${{ matrix.browser }}"
+      - run: npm run test:browser -- --project="${{ matrix.browser }}" --reporter=dot
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: browser-test-results
+          name: browser-test-results-${{ matrix.browser }}
           path: test-results/
           if-no-files-found: ignore
 

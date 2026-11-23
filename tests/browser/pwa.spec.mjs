@@ -5,6 +5,8 @@ import "../../version.js";
 
 const version = globalThis.CADENCE_VERSION;
 
+test.use({ serviceWorkers: "allow" });
+
 test("reloads a subpath with the server stopped and runs an offline workout", async ({ page }) => {
   const audio = await trackScheduledAudio(page);
   const site = await startSite();

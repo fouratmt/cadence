@@ -112,6 +112,7 @@ test("runs prepare, work, rest, and cooldown with pause, reload, skip, and reset
   const button = (name) => page.getByRole("button", { name, exact: true });
   await expect(time).toHaveText("00:05");
   await expect(page.locator("#workout-total")).toHaveText("18:50");
+  await expect(page.locator("#workout-total-label")).toHaveText("Workout total");
 
   await button("Edit timer").click();
   for (const [name, seconds] of [["Prepare", "2"], ["Work", "3"], ["Rest", "2"], ["Cooldown", "1"]]) {
@@ -127,6 +128,9 @@ test("runs prepare, work, rest, and cooldown with pause, reload, skip, and reset
   await page.clock.runFor(2000);
   await expect(phase).toHaveText("Work");
   await expect(page.locator("#next-name")).toHaveText("Rest");
+  await expect(page.locator("#workout-total-label")).toHaveText("Workout left");
+  await expect(page.locator("#workout-total")).toHaveText("00:09");
+  await expect(button("Edit timer")).toBeHidden();
   await page.clock.runFor(1000);
   await expect(time).toHaveText("00:02");
   await button("Pause").click();

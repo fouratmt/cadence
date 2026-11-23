@@ -59,6 +59,7 @@ On the first visit over HTTPS, Cadence offers installation. The install action o
 - Rounds and Tabata with editable preparation, work, rest, round count, and cooldown. Tabata adds a cycle count and a recovery interval between cycles. The default Tabata has three cycles of eight rounds and takes 18 minutes and 50 seconds.
 - Edge-to-edge interval countdown on phones in portrait, with tall, condensed digits and a larger next-phase preview.
 - Rounds, Tabata, and Stopwatch fit between the pinned Cadence header and mode bar. Settings, the timer editor, and lap history can scroll independently.
+- The phase panel shows the main clock and time left in the workout. The bottom bar identifies the timer mode, and a small heading identifies the loaded preset.
 - The mobile app shell follows the visible viewport as browser bars move, and the mode bar includes space for the home indicator.
 - Start, pause, resume, skip, reset, and automatic phase changes. The countdown recalculates from elapsed time after a browser interruption. Session state survives a reload in the same tab or app window.
 - Stopwatch with an adjustable preparation countdown and recurring lap bells. Both can be set to zero. Use **Lap** to record individual splits and cumulative times.

@@ -83,24 +83,26 @@
 
     <main id="main">
       <section id="interval-view" class="timer-view" aria-labelledby="interval-title">
-        <div class="page-heading">
-          <div>
-            <h1 id="interval-title" tabindex="-1">Rounds</h1>
-            <p class="heading-detail" id="interval-detail"><span id="workout-total">09:20</span> <span id="workout-total-label">total</span></p>
-            <p class="heading-detail" id="active-workout" hidden>Workout in progress</p>
-          </div>
-          <button class="button button-quiet" type="button" data-action="edit-timer" id="edit-timer">
-            <svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg><span>Edit timer</span>
-          </button>
-        </div>
         <div class="console interval-console">
           <div id="phase-panel" class="phase-panel" data-phase="work">
-            <div class="phase-header">
-              <p id="phase-name" class="phase-name" aria-live="polite">Work</p>
-              <span id="phase-status" class="phase-status">Ready</span>
+            <div class="phase-top">
+              <h1 id="interval-title" class="timer-title visually-hidden" tabindex="-1">Rounds</h1>
+              <div class="phase-header">
+                <p id="phase-name" class="phase-name" aria-live="polite">Work</p>
+                <div class="phase-controls">
+                  <span id="phase-status" class="phase-status">Ready</span>
+                  <button class="button button-icon phase-edit" type="button" data-action="edit-timer" id="edit-timer" aria-label="Edit timer" title="Edit timer">
+                    <svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="clock-well"><div id="phase-time" class="phase-time interval-time" role="timer">01:00</div></div>
-            <div class="phase-track" aria-hidden="true"><span id="phase-fill"></span></div>
+            <div class="phase-bottom">
+              <p class="workout-summary" id="interval-detail"><span class="label" id="workout-total-label">Workout total</span><span id="workout-total">09:20</span></p>
+              <p class="phase-detail" id="active-workout" hidden>Workout in progress</p>
+              <div class="phase-track" aria-hidden="true"><span id="phase-fill"></span></div>
+            </div>
           </div>
           <div class="console-rail">
             <div id="next-panel" class="next-panel" data-phase="rest">
@@ -132,14 +134,22 @@
       </section>
 
       <section id="stopwatch-view" class="timer-view" aria-labelledby="stopwatch-title" hidden>
-        <div class="page-heading">
-          <div><h1 id="stopwatch-title" tabindex="-1">Stopwatch</h1><p class="heading-detail" id="stopwatch-detail">Elapsed time and laps</p></div>
-          <button id="edit-stopwatch" class="button button-quiet" type="button" data-action="edit-timer"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg> Edit timer</button>
-        </div>
         <div class="console stopwatch-console">
           <div id="stopwatch-panel" class="phase-panel stopwatch-panel" data-phase="stopwatch">
-            <div class="phase-header"><p class="phase-name" id="stopwatch-phase">Elapsed</p><span class="phase-status" id="stopwatch-status">Ready</span></div>
+            <div class="phase-top">
+              <h1 id="stopwatch-title" class="timer-title visually-hidden" tabindex="-1">Stopwatch</h1>
+              <div class="phase-header">
+                <p class="phase-name" id="stopwatch-phase">Elapsed</p>
+                <div class="phase-controls">
+                  <span class="phase-status" id="stopwatch-status">Ready</span>
+                  <button id="edit-stopwatch" class="button button-icon phase-edit" type="button" data-action="edit-timer" aria-label="Edit timer" title="Edit timer">
+                    <svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
             <div class="clock-well"><div class="phase-time stopwatch-time" role="timer"><span id="stopwatch-time">00:00</span><span id="stopwatch-fraction" class="fraction">.00</span></div></div>
+            <p class="phase-detail" id="stopwatch-detail" hidden></p>
           </div>
           <div class="console-actions stopwatch-actions">
             <button id="stopwatch-main" class="button button-primary" type="button" data-action="stopwatch-main"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Start</span></button>

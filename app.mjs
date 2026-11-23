@@ -117,6 +117,11 @@ function text(id, value) {
   if (element.textContent !== value) element.textContent = value;
 }
 
+function drawTimerTitle(id, name, mode) {
+  text(id, name);
+  byId(id).classList.toggle("visually-hidden", name === modeNames[mode]);
+}
+
 function time(seconds) {
   return formatTime(seconds, settings.timeFormat);
 }
@@ -210,12 +215,12 @@ function drawInterval(now) {
   const phaseTime = byId("phase-time");
   const upcoming = frame.next;
 
-  text("interval-title", name);
+  drawTimerTitle("interval-title", name, mode);
   text("workout-total", time(Math.ceil(frame.totalRemaining / 1000)));
-  text("workout-total-label", !workout ? "total" : "left in workout");
+  text("workout-total-label", workout ? "Workout left" : "Workout total");
   byId("active-workout").hidden = !otherActive;
   byId("interval-detail").hidden = otherActive;
-  byId("edit-timer").disabled = !editable;
+  byId("edit-timer").hidden = !editable;
   phasePanel.dataset.phase = frame.kind;
   text("phase-name", PHASE_NAMES[frame.kind]);
   text("phase-status", finished ? "Finished" : running ? "Running" : workout ? "Paused" : "Ready");
@@ -346,8 +351,9 @@ function drawStopwatch() {
   const preparing = Boolean(frame.remaining);
   const value = preparing ? { time: time(Math.ceil(frame.remaining / 1000)), fraction: "" }
     : stopwatchValue(frame.elapsed, settings.timeFormat);
-  text("stopwatch-title", stopwatch.name ?? preset?.name ?? modeNames.stopwatch);
-  text("stopwatch-detail", config.timeLap ? `Lap cue every ${time(config.timeLap)}` : "Elapsed time and laps");
+  drawTimerTitle("stopwatch-title", stopwatch.name ?? preset?.name ?? modeNames.stopwatch, "stopwatch");
+  text("stopwatch-detail", config.timeLap ? `Lap cue every ${time(config.timeLap)}` : "");
+  byId("stopwatch-detail").hidden = !config.timeLap;
   text("stopwatch-phase", preparing ? "Prepare" : "Elapsed");
   const panel = byId("stopwatch-panel");
   const phase = preparing ? "prepare" : "stopwatch";
@@ -362,7 +368,7 @@ function drawStopwatch() {
   setMainButton("stopwatch-main", running ? "Pause" : hasStarted ? "Resume" : "Start");
   byId("stopwatch-lap").disabled = !running || preparing;
   byId("stopwatch-reset").disabled = !hasStarted;
-  byId("edit-stopwatch").disabled = hasStarted;
+  byId("edit-stopwatch").hidden = hasStarted;
   if (running && !document.hidden) stopwatchAnimation = requestAnimationFrame(drawStopwatch);
 }
 

@@ -19,7 +19,9 @@ test("creates, renames, loads, copies, and deletes named presets", async ({ page
   await name.fill("Speed session");
   await button("Save timer").click();
   await savedTimer("Speed session").click();
-  await expect(page.getByRole("heading", { name: "Speed session", exact: true })).toBeVisible();
+  const activePreset = page.getByRole("heading", { name: "Speed session", exact: true });
+  await expect(activePreset).toBeVisible();
+  await expect(activePreset).not.toHaveClass(/visually-hidden/);
   await expect(page.locator("#phase-time")).toHaveText("00:15");
   await page.reload();
   await expect(page.getByRole("heading", { name: "Speed session", exact: true })).toBeVisible();

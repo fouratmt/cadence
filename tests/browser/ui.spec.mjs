@@ -17,11 +17,15 @@ test("keeps the oversized countdown and controls visible across viewport sizes",
   for (const viewport of viewports) {
     await test.step(`${viewport.width} × ${viewport.height}`, async () => {
       await page.setViewportSize(viewport);
+      await expect.poll(() => page.locator(".app-shell").evaluate((shell) =>
+        Math.round(shell.getBoundingClientRect().height)
+      )).toBe(viewport.height);
       const measurements = await page.evaluate(async () => {
         const digits = await document.fonts.load('400 100px "Bebas Neue"', "01:00");
         const clock = document.querySelector("#phase-time");
         const panel = document.querySelector("#phase-panel").getBoundingClientRect();
         const text = clock.getBoundingClientRect();
+        const summary = document.querySelector("#interval-detail").getBoundingClientRect();
         const style = getComputedStyle(clock);
         const canvas = document.createElement("canvas").getContext("2d");
         canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
@@ -30,8 +34,12 @@ test("keeps the oversized countdown and controls visible across viewport sizes",
           fontLoaded: digits.length > 0,
           documentWidth: document.documentElement.scrollWidth,
           panelWidth: panel.width,
+          panelTop: panel.top,
+          headerBottom: document.querySelector(".app-top").getBoundingClientRect().bottom,
+          modeTitleHidden: document.querySelector("#interval-title").classList.contains("visually-hidden"),
           clockFits: text.left >= panel.left && text.right <= panel.right &&
             text.top >= panel.top && text.bottom <= panel.bottom,
+          summaryFits: summary.top >= text.bottom - 1 && summary.bottom <= panel.bottom,
           startBottom: document.querySelector("#interval-main").getBoundingClientRect().bottom,
           navTop: document.querySelector(".tab-bar").getBoundingClientRect().top,
           digitWidth: (ink.actualBoundingBoxLeft + ink.actualBoundingBoxRight) / innerWidth,
@@ -40,9 +48,12 @@ test("keeps the oversized countdown and controls visible across viewport sizes",
       });
       expect(measurements.fontLoaded).toBe(true);
       expect(measurements.documentWidth).toBeLessThanOrEqual(viewport.width);
+      expect(measurements.modeTitleHidden).toBe(true);
       expect(measurements.clockFits).toBe(true);
+      expect(measurements.summaryFits).toBe(true);
       expect(measurements.startBottom).toBeLessThanOrEqual(measurements.navTop);
       if (viewport.width <= 430) {
+        expect(measurements.panelTop).toBeCloseTo(measurements.headerBottom, 0);
         expect(measurements.panelWidth).toBe(viewport.width);
         expect(measurements.digitWidth).toBeGreaterThanOrEqual(0.91);
         expect(measurements.digitWidth).toBeLessThan(0.99);

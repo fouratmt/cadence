@@ -470,8 +470,11 @@ function followVisualViewport() {
   const viewport = window.visualViewport;
   if (!viewport) return;
   const shell = document.querySelector(".app-shell");
+  const appleHomeScreen = isAppleMobile() && (navigator.standalone || matchMedia("(display-mode: standalone)").matches);
   function resizeShell() {
-    if (viewport.scale !== 1 || !viewport.height) {
+    // The Home Screen window can report a short visual viewport even with no keyboard.
+    const editing = document.activeElement?.matches('input[type="text"], input[type="number"]');
+    if (viewport.scale !== 1 || !viewport.height || (appleHomeScreen && !editing)) {
       shell.style.removeProperty("--viewport-height");
       shell.style.removeProperty("--viewport-top");
       return;
@@ -483,6 +486,7 @@ function followVisualViewport() {
   viewport.addEventListener("scroll", resizeShell);
   window.addEventListener("resize", resizeShell);
   window.addEventListener("pageshow", resizeShell);
+  if (appleHomeScreen) shell.addEventListener("focusout", () => queueMicrotask(resizeShell));
   resizeShell();
 }
 

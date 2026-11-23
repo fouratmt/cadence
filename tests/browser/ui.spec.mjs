@@ -176,6 +176,39 @@ test("anchors mobile navigation to the visible viewport as browser chrome moves"
   expect(await edges()).toEqual({ header: 0, footer: 824, pageScroll: 0 });
 });
 
+test("fills the iPhone Home Screen window and makes room for the editor keyboard", async ({ page }) => {
+  await page.setViewportSize({ width: 430, height: 932 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (iPhone) AppleWebKit Safari" });
+    Object.defineProperty(navigator, "standalone", { value: true });
+    const viewport = Object.assign(new EventTarget(), { height: 873, offsetTop: 0, scale: 1 });
+    Object.defineProperty(window, "visualViewport", { value: viewport });
+  });
+  await page.goto("./");
+  await page.addStyleTag({ content: ".app-shell { --safe-bottom: 34px; }" });
+
+  const header = page.locator(".masthead");
+  const modeBar = page.getByRole("navigation", { name: "Timer modes" });
+  const footerEdge = () => modeBar.evaluate((bar) => Math.round(bar.getBoundingClientRect().bottom));
+  expect((await header.boundingBox()).height).toBe(52);
+  expect(await footerEdge()).toBe(932);
+  const tab = await modeBar.getByRole("link", { name: "Rounds" }).boundingBox();
+  expect(tab.height).toBeGreaterThanOrEqual(44);
+  expect(932 - Math.round(tab.y + tab.height)).toBe(34);
+
+  await page.getByRole("button", { name: "Edit timer", exact: true }).click();
+  const seconds = page.getByRole("group", { name: "Work", exact: true }).getByLabel("Sec");
+  await seconds.focus();
+  await page.evaluate(() => {
+    window.visualViewport.height = 540;
+    window.visualViewport.dispatchEvent(new Event("resize"));
+  });
+  expect(await footerEdge()).toBe(540);
+
+  await seconds.blur();
+  await expect.poll(footerEdge).toBe(932);
+});
+
 test("supports keyboard navigation and marks the active timer mode", async ({ page }) => {
   await page.goto("./");
   const tabata = page.getByRole("link", { name: "Tabata", exact: true });

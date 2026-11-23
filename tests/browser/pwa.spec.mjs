@@ -168,9 +168,11 @@ test("waits for Cadence's own worker on a site with a root service worker", asyn
   }
 });
 
-test("prompts iOS visitors with install steps and remembers their choice", async ({ page }) => {
+test("shows iOS install steps and offers installation again on a new visit", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (iPhone) AppleWebKit Safari" });
+    Object.defineProperty(navigator, "install", { value: undefined });
+    localStorage.setItem("cadence:install-prompt", '{"dismissed":true}');
     window.addEventListener("beforeinstallprompt", (event) => event.stopImmediatePropagation(), { capture: true });
   });
   await page.setViewportSize({ width: 320, height: 568 });
@@ -178,32 +180,59 @@ test("prompts iOS visitors with install steps and remembers their choice", async
   const notice = page.getByRole("complementary", { name: "Install Cadence" });
   await expect(notice).toBeVisible();
   await expect(page.locator("#app-version")).toHaveText(`v${version}`);
-  await notice.getByRole("button", { name: "Show steps", exact: true }).click();
+  await notice.getByRole("button", { name: "How to install", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Install app", exact: true })).toBeFocused();
   await expect(page.locator("#install-steps")).toContainText("Add to Home Screen");
+  await expect(page.locator("#install-steps")).toBeInViewport({ ratio: 0.99 });
+  await expect(notice).toBeHidden();
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   await expect(page.locator("#announcement")).not.toHaveText("A Cadence update is available.");
   await page.reload();
+  await expect(notice).toBeVisible();
+  await notice.getByRole("button", { name: "Dismiss install prompt" }).click();
   await expect(notice).toBeHidden();
   await expect(page.getByRole("heading", { name: "Install app", exact: true })).toBeVisible();
 });
 
 test("uses the browser install prompt only after the user taps Install", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "install", { value: undefined });
+    window.addEventListener("beforeinstallprompt", (event) => {
+      if (event.isTrusted) event.stopImmediatePropagation();
+    }, { capture: true });
+  });
   await page.goto("./");
-  await page.evaluate(() => {
+  const browserCanPromoteInstall = await page.evaluate(() => {
     window.installRequests = 0;
     const event = new Event("beforeinstallprompt", { cancelable: true });
     event.prompt = async () => {
       window.installRequests++;
       return { outcome: "dismissed" };
     };
-    window.dispatchEvent(event);
+    return window.dispatchEvent(event);
   });
+  expect(browserCanPromoteInstall).toBe(true);
   const notice = page.getByRole("complementary", { name: "Install Cadence" });
   await expect(notice).toBeVisible();
   expect(await page.evaluate(() => window.installRequests)).toBe(0);
   await notice.getByRole("button", { name: "Install", exact: true }).click();
   await expect(notice).toBeHidden();
+  expect(await page.evaluate(() => window.installRequests)).toBe(1);
+});
+
+test("uses the Web Install API from the install button when exposed", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.installRequests = 0;
+    Object.defineProperty(navigator, "install", { value: async () => { window.installRequests++; } });
+    window.addEventListener("beforeinstallprompt", (event) => event.stopImmediatePropagation(), { capture: true });
+  });
+  await page.goto("./#more");
+  const notice = page.getByRole("complementary", { name: "Install Cadence" });
+  await expect(notice).toBeVisible();
+  expect(await page.evaluate(() => window.installRequests)).toBe(0);
+  await notice.getByRole("button", { name: "Install", exact: true }).click();
+  await expect(notice).toBeHidden();
+  await expect(page.locator("#install-steps")).toContainText("Cadence is installed.");
   expect(await page.evaluate(() => window.installRequests)).toBe(1);
 });
 

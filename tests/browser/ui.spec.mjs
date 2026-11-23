@@ -2,7 +2,7 @@ import axe from "axe-core";
 import { expect, test } from "./fixtures.mjs";
 
 test("keeps the oversized countdown and controls visible across viewport sizes", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("cadence:install-prompt", '{"dismissed":true}'));
+  await page.addInitScript(() => Object.defineProperty(navigator, "standalone", { value: true }));
   await page.goto("./");
   const viewports = [
     { width: 320, height: 568 },
@@ -124,7 +124,7 @@ test("fits each timer with prompts, a long title, and saved laps", async ({ page
 test("pins the header and mode bar as settings and lap history scroll", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.addInitScript(() => {
-    localStorage.setItem("cadence:install-prompt", '{"dismissed":true}');
+    Object.defineProperty(navigator, "standalone", { value: true });
     sessionStorage.setItem("cadence:session:v1", JSON.stringify({
       stopwatch: { elapsed: 100_000, startedAt: null, laps: Array.from({ length: 100 }, (_, index) => (index + 1) * 1000) },
     }));
@@ -152,7 +152,7 @@ test("anchors mobile navigation to the visible viewport as browser chrome moves"
   await page.addInitScript(() => {
     const viewport = Object.assign(new EventTarget(), { height: 670, offsetTop: 22, scale: 1 });
     Object.defineProperty(window, "visualViewport", { value: viewport });
-    localStorage.setItem("cadence:install-prompt", '{"dismissed":true}');
+    Object.defineProperty(navigator, "standalone", { value: true });
   });
   await page.goto("./");
   await page.getByRole("button", { name: "Settings", exact: true }).click();

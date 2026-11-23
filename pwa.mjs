@@ -5,17 +5,37 @@ export function isAppleMobile() {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-export function setupPwa({ canReload, openInstallGuide, installDismissed, onDismissInstall, announce }) {
+export function installInstructions(agent, appleMobile) {
+  const firefox = /Firefox|FxiOS/i.test(agent);
+  const edge = /Edg/i.test(agent);
+  const chrome = /Chrome|Chromium|CriOS/i.test(agent);
+  if (appleMobile) {
+    const share = firefox || chrome || edge ? "Tap Share in the address bar." : "Tap Share in Safari’s toolbar or Page Menu.";
+    return `${share} Choose Add to Home Screen, turn on Open as Web App if shown, then tap Add.`;
+  }
+  if (/Android/i.test(agent)) {
+    if (firefox) return "Open Firefox’s three-dot menu, tap Install, then tap Add automatically.";
+    if (chrome && !edge) return "Open Chrome’s three-dot menu. Choose Install and create shortcut → Install, or Add to Home screen if shown.";
+    return "Open your browser’s menu and choose Install or Add to Home screen.";
+  }
+  if (edge) return "In Edge, open ⋯ → More tools → Apps → Install this site as an app.";
+  if (chrome) return "Click Install in the address bar, or open Chrome’s ⋮ menu → Cast, save, and share → Install page as app.";
+  if (firefox && /Windows/i.test(agent)) return "Click the Web Apps button in the Firefox address bar to add Cadence to your taskbar. If it’s unavailable, use Chrome or Edge.";
+  if (firefox) return "Open Cadence in Chrome or Edge to install it, or use Safari’s File → Add to Dock on a Mac.";
+  if (/Safari/i.test(agent)) return "In Safari, choose File → Add to Dock, then click Add.";
+  return "Look for an install option in your browser’s address bar or menu. If it’s unavailable, open Cadence in Chrome or Edge.";
+}
+
+export function setupPwa({ canReload, openInstallGuide, announce }) {
   const byId = (id) => document.getElementById(id);
   const installNotice = byId("install-notice");
+  const installAction = byId("install-notice-action");
+  const installButton = byId("install-button");
+  const installSteps = byId("install-steps");
   const updateNotice = byId("update-notice");
   const updateButton = byId("update-button");
   const standaloneMode = matchMedia("(display-mode: standalone)");
-  const agent = navigator.userAgent;
-  const appleMobile = isAppleMobile();
-  const android = /Android/i.test(agent);
-  const chromium = /Chrome|Chromium|Edg/i.test(agent);
-  const desktopSafari = /Safari/i.test(agent) && !chromium && !appleMobile;
+  const instructions = installInstructions(navigator.userAgent, isAppleMobile());
   const serviceWorker = navigator.serviceWorker;
   const workerUrl = new URL("./sw.js", import.meta.url).href;
   const cadenceController = () => {
@@ -25,13 +45,17 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
   let controller = cadenceController();
   let registration;
   let installPrompt;
+  let webInstallAvailable = typeof navigator.install === "function";
+  let installing = false;
+  let installDismissed = false;
   let installed = false;
   let offlineStatus = "Preparing offline access";
   let updatedController;
   let dismissedUpdate;
   let applyingUpdate;
 
-  const isInstalled = () => installed || standaloneMode.matches || navigator.standalone;
+  const isStandalone = () => standaloneMode.matches || navigator.standalone;
+  const isInstalled = () => installed || isStandalone();
 
   function pendingUpdate() {
     const waiting = registration?.waiting;
@@ -41,49 +65,62 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
   function refresh() {
     const pending = pendingUpdate();
     const canPrompt = canReload();
-    const offerInstall = window.isSecureContext && (installPrompt || appleMobile || android || chromium || desktopSafari);
     const showUpdate = canPrompt && pending && pending !== dismissedUpdate;
     if (showUpdate && updateNotice.hidden) announce("A Cadence update is available.");
     updateNotice.hidden = !showUpdate;
     updateButton.disabled = Boolean(applyingUpdate);
-    installNotice.hidden = !canPrompt || !offerInstall || installDismissed || isInstalled() || !updateNotice.hidden;
+    installNotice.hidden = !canPrompt || !window.isSecureContext || installDismissed || isInstalled() || !updateNotice.hidden;
   }
 
   function drawInstall() {
-    let steps = "Look for Install app or Add to Home Screen in your browser menu.";
-    if (isInstalled()) steps = "Cadence is open as an installed app.";
-    else if (appleMobile) steps = "Open the browser’s Share menu and choose Add to Home Screen. Leave Open as Web App enabled if shown.";
-    else if (android && /Firefox/i.test(agent)) steps = "Open the Firefox menu, tap Install, then add Cadence to your Home Screen.";
-    else if (android) steps = "Open the Chrome menu and select Install and create shortcut, then Install. Some versions show Add to Home screen.";
-    else if (desktopSafari) steps = "In Safari, choose File → Add to Dock.";
-    else if (installPrompt) steps = "Install Cadence to open it in its own window.";
+    const canInstall = window.isSecureContext && (installPrompt || webInstallAvailable);
+    const action = canInstall ? "Install" : "How to install";
+    let steps = instructions;
+    if (isStandalone()) steps = "Cadence is open as an installed app.";
+    else if (installed) steps = "Cadence is installed. Launch it from your Home Screen or app launcher.";
+    else if (!window.isSecureContext) steps = "Open Cadence over HTTPS to install it.";
 
-    byId("install-steps").textContent = steps;
-    byId("install-button").hidden = isInstalled() || !installPrompt;
-    byId("install-notice-action").textContent = installPrompt ? "Install" : "Show steps";
+    if (installSteps.textContent !== steps) installSteps.textContent = steps;
+    installButton.hidden = isInstalled() || !canInstall;
+    installButton.disabled = installing;
+    if (installAction.textContent !== action) installAction.textContent = action;
     byId("offline-status").textContent = offlineStatus;
     refresh();
   }
 
   function dismissInstall() {
     installDismissed = true;
-    onDismissInstall();
     refresh();
   }
 
   async function install() {
+    if (installing || isInstalled()) return;
     const prompt = installPrompt;
-    installPrompt = undefined;
     dismissInstall();
-    drawInstall();
-    if (!prompt) {
+    if (!prompt && !webInstallAvailable) {
       openInstallGuide();
       return;
     }
+    installPrompt = undefined;
+    installing = true;
+    drawInstall();
     try {
-      await prompt.prompt();
-    } catch {
-      openInstallGuide();
+      if (prompt) {
+        const result = await prompt.prompt();
+        const choice = result ?? await prompt.userChoice;
+        if (choice?.outcome === "accepted") installed = true;
+      } else {
+        await navigator.install();
+        installed = true;
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        if (!prompt) webInstallAvailable = false;
+        openInstallGuide();
+      }
+    } finally {
+      installing = false;
+      drawInstall();
     }
   }
 
@@ -173,14 +210,19 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
   }
 
   window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
+    if (isInstalled() || typeof event.prompt !== "function") return;
     installPrompt = event;
     drawInstall();
+    event.userChoice?.catch(() => null).then((choice) => {
+      if (installPrompt !== event) return;
+      installPrompt = undefined;
+      if (choice?.outcome === "accepted") installed = true;
+      drawInstall();
+    });
   });
   window.addEventListener("appinstalled", () => {
     installPrompt = undefined;
     installed = true;
-    dismissInstall();
     drawInstall();
   });
   standaloneMode.addEventListener("change", drawInstall);

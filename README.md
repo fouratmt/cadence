@@ -46,11 +46,11 @@ When a new version finishes downloading, Cadence prompts you to update when you 
 
 ## Install
 
-On the first visit over HTTPS, Cadence offers installation. The install action opens the browser’s prompt when supported or shows the steps in **More**. Open the app once online and wait for **More → Available offline** before going offline.
+Cadence offers installation on each visit over HTTPS. **Install** opens the browser’s prompt when available. **How to install** opens instructions for the current browser in **More**. Dismissing the banner hides it for the current visit. Open the app once online and wait for **More → Available offline** before going offline.
 
 - **iOS and iPadOS** · In Safari, Chrome, or Firefox, open the browser’s Share menu and choose **Add to Home Screen**. Leave **Open as Web App** enabled if offered. [Apple](https://support.apple.com/guide/iphone/iphea86e5236/ios) · [Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DiOS) · [Firefox](https://support.mozilla.org/kb/add-website-shortcut-your-home-screen-ios)
 - **Android** · In Chrome, use **Install and create shortcut → Install** or **Add to Home screen**. In Firefox, use **Menu → Install**. [Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid) · [Firefox](https://support.mozilla.org/kb/use-web-apps-firefox-android)
-- **Desktop** · Use the timer in your browser. On a browser that supports installation, look in its address bar or app menu. Safari on macOS supports **File → Add to Dock**. [Apple](https://support.apple.com/en-us/104996)
+- **Desktop** · Chrome and Edge offer installation in the address bar or browser menu. Safari on macOS uses **File → Add to Dock**. Firefox for Windows uses the **Web Apps** button in the address bar when available. [Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DDesktop) · [Edge](https://support.microsoft.com/en-us/edge/install-manage-or-uninstall-apps-in-microsoft-edge) · [Safari](https://support.apple.com/en-us/104996) · [Firefox](https://support.mozilla.org/en-US/kb/web-apps-firefox-windows)
 
 ## Progress
 
@@ -68,7 +68,7 @@ On the first visit over HTTPS, Cadence offers installation. The install action o
 - On iPhone and iPad, **Start**, **Resume**, and **Preview** enable media playback for the selected cues. Cadence renders them from its bundled audio, with the selected volume applied before playback.
 - Screen Wake Lock during running timers, requested again when you return. If the browser denies it, the app displays a message. A manually locked or suspended device can miss cues even though the timer catches up on return. [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) · [Chrome Page Lifecycle](https://developer.chrome.com/docs/web-platform/page-lifecycle-api)
 - Standalone install manifest and offline caching for the app, font, icons, and voice cues. On devices where the installed app uses a separate storage container, add your presets in the app window you plan to use.
-- First-visit install prompt, optional updates after a new version downloads, and the served version beside the Cadence name.
+- Per-visit install offer with browser-specific steps, optional updates after a new version downloads, and the served version beside the Cadence name.
 
 ### Verified
 

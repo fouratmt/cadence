@@ -11,7 +11,6 @@ const modeNames = { rounds: "Rounds", tabata: "Tabata", stopwatch: "Stopwatch" }
 const intervalModes = ["rounds", "tabata"];
 const storageKey = "cadence:v1";
 const sessionKey = "cadence:session:v1";
-const installKey = "cadence:install-prompt";
 const fields = {
   rounds: ["prepare", "work", "rest", "rounds", "cooldown"],
   tabata: ["prepare", "work", "rest", "rounds", "cycles", "cycleRest", "cooldown"],
@@ -807,11 +806,9 @@ const pwa = setupPwa({
   canReload: () => !timerRunning() && view !== "editor" && !(view === "settings" && settingsReturn === "editor"),
   openInstallGuide: () => {
     navigate("more");
-    byId("install-title").focus();
-    byId("install-title").scrollIntoView({ block: "nearest" });
+    byId("install-title").focus({ preventScroll: true });
+    byId("install-guide").scrollIntoView({ block: "nearest" });
   },
-  installDismissed: read("localStorage", installKey).dismissed === true,
-  onDismissInstall: () => write("localStorage", installKey, { dismissed: true }),
   announce,
 });
 

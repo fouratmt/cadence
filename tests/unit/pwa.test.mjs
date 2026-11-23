@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
+import { installInstructions } from "../../pwa.mjs";
 
 const root = new URL("../../", import.meta.url);
 const scope = "https://example.test/cadence/";
@@ -10,6 +11,25 @@ const previousCache = `sports-timer:${scope}:v3`;
 const code = await readFile(new URL("sw.js", root), "utf8");
 const versionCode = await readFile(new URL("version.js", root), "utf8");
 const manifest = JSON.parse(await readFile(new URL("manifest.webmanifest", root), "utf8"));
+
+test("uses the browser's own menu labels in the install guide", () => {
+  const browsers = [
+    ["iPhone Safari", true, /Page Menu.*Add to Home Screen/],
+    ["iPhone CriOS Safari", true, /Share in the address bar.*Add to Home Screen/],
+    ["iPhone FxiOS Safari", true, /Share in the address bar.*Add to Home Screen/],
+    ["Macintosh Safari", true, /Add to Home Screen/],
+    ["Android Firefox", false, /Firefox.*Install.*Add automatically/],
+    ["Android Chrome Mobile Safari", false, /Install and create shortcut/],
+    ["Windows Chrome Safari", false, /Install page as app/],
+    ["Windows Chrome Safari Edg", false, /Install this site as an app/],
+    ["Windows Firefox", false, /Web Apps button/],
+    ["Linux Firefox", false, /Chrome or Edge/],
+    ["Macintosh Safari", false, /File → Add to Dock/],
+  ];
+  for (const [agent, appleMobile, expected] of browsers) {
+    assert.match(installInstructions(agent, appleMobile), expected, agent);
+  }
+});
 
 function worker() {
   const handlers = new Map();

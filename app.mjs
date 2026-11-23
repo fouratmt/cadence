@@ -3,7 +3,7 @@ import {
   pad, PHASE_NAMES, stopwatchFrame, stopwatchValue, validTimer, workoutFrame,
 } from "./timer.mjs";
 import { ScreenAwake, WorkoutCues } from "./cues.mjs";
-import { setupPwa } from "./pwa.mjs";
+import { isAppleMobile, setupPwa } from "./pwa.mjs";
 
 const byId = (id) => document.getElementById(id);
 const modes = ["rounds", "tabata", "stopwatch", "more"];
@@ -93,8 +93,9 @@ const savedFrame = interval && workoutFrame(interval.timeline, elapsedTime(inter
 let lastIndex = savedFrame?.index ?? -1;
 let lastCountdownSecond = Math.ceil((savedFrame?.remaining ?? 0) / 1000);
 let lastRoundTrack = "";
-const cues = new WorkoutCues();
-const stopwatchCues = new WorkoutCues();
+const appleMobile = isAppleMobile();
+const cues = new WorkoutCues({ useMedia: appleMobile });
+const stopwatchCues = new WorkoutCues({ useMedia: appleMobile });
 const screenAwake = new ScreenAwake(drawWakeStatus);
 
 function saveSession() {
@@ -459,6 +460,26 @@ function syncWake(retry = false) {
   pwa.refresh();
 }
 
+function followVisualViewport() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  const shell = document.querySelector(".app-shell");
+  function resizeShell() {
+    if (viewport.scale !== 1 || !viewport.height) {
+      shell.style.removeProperty("--viewport-height");
+      shell.style.removeProperty("--viewport-top");
+      return;
+    }
+    shell.style.setProperty("--viewport-height", `${viewport.height}px`);
+    shell.style.setProperty("--viewport-top", `${Math.max(0, viewport.offsetTop)}px`);
+  }
+  viewport.addEventListener("resize", resizeShell);
+  viewport.addEventListener("scroll", resizeShell);
+  window.addEventListener("resize", resizeShell);
+  window.addEventListener("pageshow", resizeShell);
+  resizeShell();
+}
+
 function drawWakeStatus(status) {
   const element = byId("wake-status");
   element.hidden = status !== "unavailable";
@@ -675,10 +696,10 @@ function changeSetting(event) {
   settings[name] = type === "checkbox" ? checked : type === "range" ? Number(value) : value;
   if (["voice", "sound", "soundStyle", "volume"].includes(name)) {
     cues.stop();
-    cues.prepare(settings);
+    cues.prepare(settings, false);
     if (stopwatch.startedAt !== null) {
       stopwatchCues.stop();
-      stopwatchCues.prepare(stopwatchAudioSettings());
+      stopwatchCues.prepare(stopwatchAudioSettings(), false);
     }
   }
   drawSettings();
@@ -725,6 +746,11 @@ const actions = {
 };
 
 document.addEventListener("click", (event) => {
+  if (event.isTrusted) {
+    if (interval?.startedAt != null) cues.prepare(settings);
+    if (stopwatch.startedAt !== null) stopwatchCues.prepare(stopwatchAudioSettings());
+    syncWake(true);
+  }
   const button = event.target.closest("[data-action]");
   if (button) {
     const row = button.closest("[data-preset]");
@@ -755,17 +781,17 @@ settingsForm.addEventListener("submit", (event) => event.preventDefault());
 
 window.addEventListener("hashchange", () => setMode(readMode()));
 const syncVisibility = () => {
+  if (document.hidden) {
+    cues.interrupt();
+    stopwatchCues.interrupt();
+  }
   syncInterval(true);
   syncStopwatch();
   syncWake(true);
 };
 document.addEventListener("visibilitychange", syncVisibility);
 window.addEventListener("pageshow", syncVisibility);
-document.addEventListener("pointerdown", () => {
-  if (interval?.startedAt != null) cues.prepare(settings);
-  if (stopwatch.startedAt !== null) stopwatchCues.prepare(stopwatchAudioSettings());
-  syncWake(true);
-});
+followVisualViewport();
 
 const pwa = setupPwa({
   canReload: () => !timerRunning() && view !== "editor" && !(view === "settings" && settingsReturn === "editor"),

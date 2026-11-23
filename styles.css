@@ -49,6 +49,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+html, body { block-size: 100%; overflow: hidden; overscroll-behavior: none; }
 body { margin: 0; min-inline-size: 0; }
 h1, h2, p { margin: 0; }
 a { color: inherit; text-decoration: none; }
@@ -83,13 +84,15 @@ h1:focus { outline: none; }
   --gutter: clamp(20px, 5vw, 52px);
   --inset-start: max(var(--gutter), env(safe-area-inset-left));
   --inset-end: max(var(--gutter), env(safe-area-inset-right));
+  position: fixed;
+  inset: var(--viewport-top, 0px) 0 auto;
   max-width: 1240px;
-  block-size: 100vh;
-  block-size: 100dvh;
+  block-size: 100%;
+  block-size: var(--viewport-height, 100dvh);
   display: flex;
   flex-direction: column;
   margin-inline: auto;
-  overflow: clip;
+  overflow: hidden;
 }
 
 .app-top, .tab-bar { flex: none; }
@@ -194,7 +197,7 @@ h1:focus { outline: none; }
 main {
   flex: 1;
   min-block-size: 0;
-  overflow: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
   padding: clamp(16px, 3vw, 34px) var(--inset-end) 16px var(--inset-start);
   scroll-padding-block: 12px;
@@ -472,15 +475,18 @@ dialog::backdrop { background: rgb(0 0 0 / .7); }
   .console-rail .console-actions { grid-column: 1 / -1; }
   .console-actions .button { min-height: 52px; }
   .console-actions .button-icon { width: 50px; }
+  .tab-bar a { flex-direction: column; gap: 3px; min-height: 52px; font-size: .78rem; }
+  .stopwatch-console { grid-template-areas: "clock" "actions" "laps"; grid-template-rows: minmax(0, 1fr) auto auto; }
+  .laps-panel { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
   .tab-bar {
     margin: 0;
     border-width: 1px 0 0;
     border-radius: 0;
     padding: 5px max(12px, env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   }
-  .tab-bar a { flex-direction: column; gap: 3px; min-height: 52px; font-size: .78rem; }
-  .stopwatch-console { grid-template-areas: "clock" "actions" "laps"; grid-template-rows: minmax(0, 1fr) auto auto; }
-  .laps-panel { flex-direction: row; align-items: center; justify-content: space-between; }
 }
 
 @media (max-width: 365px) {

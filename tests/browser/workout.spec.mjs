@@ -7,6 +7,74 @@ async function openWithClock(page, path = "./") {
   await page.clock.pauseAt(new Date(start.getTime() + 60_000));
 }
 
+test("plays iPhone Home Screen cues through the media element unlocked by Start", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (iPhone) AppleWebKit FxiOS" });
+    Object.defineProperty(navigator, "standalone", { value: true });
+    Object.defineProperty(navigator, "audioSession", { value: { type: "auto" } });
+    localStorage.setItem("cadence:v1", JSON.stringify({
+      settings: { soundStyle: "sport", volume: 60 },
+      baseTimers: { rounds: { prepare: 0, work: 4, rest: 0, cooldown: 0, rounds: 1 } },
+    }));
+    window.AudioContext = class { constructor() { throw new Error("Live audio unavailable"); } };
+    window.mediaClips = [];
+    let unlocked = new WeakSet();
+    let hidden = false;
+    Object.defineProperty(document, "hidden", { get: () => hidden });
+    window.interruptMedia = () => {
+      unlocked = new WeakSet();
+      hidden = true;
+      document.dispatchEvent(new Event("visibilitychange"));
+      hidden = false;
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    HTMLMediaElement.prototype.play = function () {
+      if (!unlocked.has(this) && !navigator.userActivation.isActive) {
+        return Promise.reject(new DOMException("A tap is required", "NotAllowedError"));
+      }
+      unlocked.add(this);
+      window.mediaClips.push(fetch(this.src).then(async (response) => {
+        const audio = new DataView(await response.arrayBuffer());
+        const samples = audio.getUint32(40, true) / 2;
+        let peak = 0;
+        for (let index = 0; index < samples; index++) {
+          peak = Math.max(peak, Math.abs(audio.getInt16(44 + index * 2, true)) / 32767);
+        }
+        return { seconds: samples / audio.getUint32(24, true), peak };
+      }));
+      return Promise.resolve();
+    };
+  });
+  await openWithClock(page);
+  const clips = () => page.evaluate(() => Promise.all(window.mediaClips));
+  const button = (name) => page.getByRole("button", { name, exact: true });
+  await button("Start").click();
+  await expect.poll(async () => (await clips()).length).toBe(2);
+  const [activation, work] = await clips();
+  expect(activation.peak).toBe(0);
+  expect(work.seconds).toBeCloseTo(.697, 2);
+  expect(work.peak).toBeCloseTo(.63 * .78 * .6, 2);
+  expect(await page.evaluate(() => navigator.audioSession.type)).toBe("playback");
+
+  for (const count of [3, 4, 5]) {
+    await page.clock.runFor(1000);
+    await expect.poll(async () => (await clips()).length).toBe(count);
+    const bip = (await clips()).at(-1);
+    expect(bip.seconds).toBeCloseTo(.09, 2);
+    expect(bip.peak).toBeGreaterThan(.1);
+  }
+  await page.clock.runFor(1000);
+  await expect(page.locator("#phase-name")).toHaveText("Complete");
+  await expect.poll(async () => (await clips()).length).toBe(6);
+  expect((await clips()).at(-1).seconds).toBeGreaterThan(.5);
+
+  await page.evaluate(() => window.interruptMedia());
+  await button("Settings").click();
+  await button("Preview").click();
+  await expect.poll(async () => (await clips()).length).toBe(8);
+  expect((await clips()).at(-1).seconds).toBeCloseTo(.697, 2);
+});
+
 test("sounds one bip at 3, 2, and 1 seconds before the next phase bell", async ({ page }) => {
   const scheduled = await trackScheduledAudio(page);
   const audio = async () => (await scheduled()).map(({ kind, time }) => ({ kind, time }));

@@ -1,5 +1,10 @@
 import "./version.js";
 
+export function isAppleMobile() {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 export function setupPwa({ canReload, openInstallGuide, installDismissed, onDismissInstall, announce }) {
   const byId = (id) => document.getElementById(id);
   const installNotice = byId("install-notice");
@@ -7,8 +12,7 @@ export function setupPwa({ canReload, openInstallGuide, installDismissed, onDism
   const updateButton = byId("update-button");
   const standaloneMode = matchMedia("(display-mode: standalone)");
   const agent = navigator.userAgent;
-  const appleMobile = /iPhone|iPad|iPod/.test(agent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const appleMobile = isAppleMobile();
   const android = /Android/i.test(agent);
   const chromium = /Chrome|Chromium|Edg/i.test(agent);
   const desktopSafari = /Safari/i.test(agent) && !chromium && !appleMobile;

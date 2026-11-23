@@ -136,6 +136,35 @@ test("pins the header and mode bar as settings and lap history scroll", async ({
   }
 });
 
+test("anchors mobile navigation to the visible viewport as browser chrome moves", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    const viewport = Object.assign(new EventTarget(), { height: 670, offsetTop: 22, scale: 1 });
+    Object.defineProperty(window, "visualViewport", { value: viewport });
+    localStorage.setItem("cadence:install-prompt", '{"dismissed":true}');
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const edges = () => page.evaluate(() => ({
+    header: Math.round(document.querySelector(".app-top").getBoundingClientRect().top),
+    footer: Math.round(document.querySelector(".tab-bar").getBoundingClientRect().bottom),
+    pageScroll: window.scrollY,
+  }));
+  const scrollSettings = () => page.locator("main").evaluate((main) => {
+    main.scrollTop = main.scrollHeight;
+    window.scrollTo(0, 100);
+    return main.scrollTop;
+  });
+  expect(await scrollSettings()).toBeGreaterThan(0);
+  expect(await edges()).toEqual({ header: 22, footer: 692, pageScroll: 0 });
+
+  await page.evaluate(() => {
+    Object.assign(window.visualViewport, { height: 824, offsetTop: 0 });
+    window.visualViewport.dispatchEvent(new Event("resize"));
+  });
+  expect(await edges()).toEqual({ header: 0, footer: 824, pageScroll: 0 });
+});
+
 test("supports keyboard navigation and marks the active timer mode", async ({ page }) => {
   await page.goto("./");
   const tabata = page.getByRole("link", { name: "Tabata", exact: true });

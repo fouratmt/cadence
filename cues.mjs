@@ -27,21 +27,146 @@ function soundStyle(name) {
   return Object.hasOwn(SOUND_STYLES, name) ? SOUND_STYLES[name] : SOUND_STYLES.bell;
 }
 
+const MIX_RATE = 24_000;
+
+function wavBlob(samples) {
+  const wav = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  wav.setUint32(0, 0x52494646); // RIFF
+  wav.setUint32(4, wav.byteLength - 8, true);
+  wav.setUint32(8, 0x57415645); // WAVE
+  wav.setUint32(12, 0x666d7420); // fmt
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true); // PCM
+  wav.setUint16(22, 1, true); // Mono
+  wav.setUint32(24, MIX_RATE, true);
+  wav.setUint32(28, MIX_RATE * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  wav.setUint32(36, 0x64617461); // data
+  wav.setUint32(40, samples.length * 2, true);
+  for (let index = 0; index < samples.length; index++) {
+    wav.setInt16(44 + index * 2, Math.max(-1, Math.min(1, samples[index])) * 32767, true);
+  }
+  return new Blob([wav], { type: "audio/wav" });
+}
+
+async function renderCue(seconds, draw) {
+  const context = new OfflineAudioContext(1, Math.ceil(seconds * MIX_RATE), MIX_RATE);
+  draw(context);
+  return wavBlob((await context.startRendering()).getChannelData(0));
+}
+
+let activationClip;
+
+class MediaCuePlayer {
+  #audio = new Audio();
+  #activation;
+  #needsGesture = true;
+  #request = 0;
+  #url;
+  #settingsKey;
+  #mixes = new Map();
+
+  activate() {
+    if (!this.#needsGesture) return;
+    this.stop();
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+    } catch {
+      // An audio session is optional for media element playback.
+    }
+    // WebKit grants autoplay permission to the element used in the tap handler.
+    activationClip ??= URL.createObjectURL(wavBlob(new Float32Array(720)));
+    this.#audio.src = activationClip;
+    const activation = this.#audio.play().then(() => {
+      if (this.#activation === activation && !document.hidden) this.#needsGesture = false;
+      return true;
+    }, () => false);
+    this.#activation = activation;
+  }
+
+  interrupt() {
+    this.#needsGesture = true;
+  }
+
+  #releaseClip() {
+    if (!this.#url) return;
+    this.#audio.pause();
+    URL.revokeObjectURL(this.#url);
+    this.#url = undefined;
+  }
+
+  stop() {
+    this.#request++;
+    this.#releaseClip();
+  }
+
+  async play(kind, settings, render) {
+    if (!this.#activation) return;
+    const request = ++this.#request;
+    const settingsKey = `${settings.sound}:${settings.soundStyle}:${settings.voice}:${settings.volume}`;
+    if (settingsKey !== this.#settingsKey) {
+      this.#settingsKey = settingsKey;
+      this.#mixes.clear();
+    }
+    if (!this.#mixes.has(kind)) this.#mixes.set(kind, render());
+    const mix = this.#mixes.get(kind);
+    let clip;
+    try {
+      clip = await mix;
+    } catch {
+      if (this.#mixes.get(kind) === mix) this.#mixes.delete(kind);
+      return;
+    }
+    if (!clip && this.#mixes.get(kind) === mix) this.#mixes.delete(kind);
+    if (!clip || !(await this.#activation) || request !== this.#request) return;
+    this.#releaseClip();
+    this.#url = URL.createObjectURL(clip);
+    this.#audio.src = this.#url;
+    try {
+      await this.#audio.play();
+    } catch {
+      if (request === this.#request) this.interrupt();
+    }
+  }
+}
+
+function phaseTracks(clip, style, cue, volume, hasVoice) {
+  if (!clip) return { tracks: [], voiceAt: 0 };
+  const notes = (style.phrases ?? BELL_PHRASES)[cue];
+  const voiceAt = Math.max(notes.at(-1)[0] + .32, cue === "work" && style.workFile ? clip.duration : 0);
+  const tracks = notes.map(([offset, pitch, level]) => ({
+    clip, offset, volume: volume * style.gain * level, rate: 2 ** ((pitch + style.transpose) / 12),
+    ring: hasVoice ? voiceAt - offset : Infinity,
+  }));
+  return { tracks, voiceAt };
+}
+
 export class WorkoutCues {
   #context;
+  #media;
   #buffers = new Map();
   #playing = new Set();
   #sequence = 0;
 
-  prepare(settings) {
+  constructor({ useMedia = false } = {}) {
+    if (useMedia && typeof OfflineAudioContext === "function") this.#media = new MediaCuePlayer();
+  }
+
+  prepare(settings, activate = true) {
     if ((!settings.sound && !settings.voice) || !settings.volume) return;
     try {
-      this.#context ??= new AudioContext();
+      if (this.#media) {
+        if (activate) this.#media.activate();
+        this.#context ??= new OfflineAudioContext(1, 1, MIX_RATE);
+      } else {
+        this.#context ??= new AudioContext();
+      }
     } catch {
       return;
     }
 
-    if (this.#context.state !== "running") this.#context.resume().catch(() => {});
+    if (!this.#media && this.#context.state !== "running") this.#context.resume().catch(() => {});
     if (settings.sound) {
       const { file, workFile } = soundStyle(settings.soundStyle);
       this.#load(file);
@@ -67,8 +192,13 @@ export class WorkoutCues {
 
   stop() {
     this.#sequence++;
+    this.#media?.stop();
     for (const source of this.#playing) source.stop();
     this.#playing.clear();
+  }
+
+  interrupt() {
+    this.#media?.interrupt();
   }
 
   #schedule(source, start) {
@@ -77,8 +207,7 @@ export class WorkoutCues {
     source.start(start);
   }
 
-  #start(buffer, start, volume, rate = 1, ring = Infinity) {
-    const context = this.#context;
+  #start(context, buffer, start, volume, rate = 1, ring = Infinity) {
     const source = context.createBufferSource();
     const gain = context.createGain();
     const shortened = ring < buffer.duration / rate;
@@ -90,38 +219,46 @@ export class WorkoutCues {
       gain.gain.linearRampToValueAtTime(0, start + ring);
     }
     source.connect(gain).connect(context.destination);
-    this.#schedule(source, start);
+    if (context === this.#context) this.#schedule(source, start);
+    else source.start(start);
     if (shortened) source.stop(start + ring);
   }
 
-  async countdown(settings) {
-    const context = this.#context;
-    if (!settings.sound || !settings.volume || !context) return;
-    const sequence = this.#sequence;
-    if (context.state !== "running") await context.resume().catch(() => {});
-    if (sequence !== this.#sequence || context.state !== "running") return;
-
+  #bip(context, volume) {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const start = context.currentTime;
     const end = start + .09;
     oscillator.frequency.value = 880;
     gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(settings.volume / 100 * .22, start + .005);
+    gain.gain.linearRampToValueAtTime(volume * .22, start + .005);
     gain.gain.linearRampToValueAtTime(0, end);
     oscillator.connect(gain).connect(context.destination);
-    this.#schedule(oscillator, start);
+    if (context === this.#context) this.#schedule(oscillator, start);
+    else oscillator.start(start);
     oscillator.stop(end);
+  }
+
+  async countdown(settings) {
+    const context = this.#context;
+    if (!settings.sound || !settings.volume || !context) return;
+    const volume = settings.volume / 100;
+    if (this.#media) {
+      return this.#media.play("countdown", settings, () => renderCue(.09, (output) => this.#bip(output, volume)));
+    }
+    const sequence = this.#sequence;
+    if (context.state !== "running") await context.resume().catch(() => {});
+    if (sequence === this.#sequence && context.state === "running") this.#bip(context, volume);
   }
 
   async play(phase, settings) {
     this.stop();
     if ((!settings.sound && !settings.voice) || !settings.volume || !this.#context) return;
     const sequence = this.#sequence;
-    if (this.#context.state !== "running") {
+    if (!this.#media && this.#context.state !== "running") {
       await this.#context.resume().catch(() => {});
     }
-    if (sequence !== this.#sequence || this.#context.state !== "running") return;
+    if (sequence !== this.#sequence || (!this.#media && this.#context.state !== "running")) return;
 
     const context = this.#context;
     const volume = settings.volume / 100;
@@ -129,25 +266,29 @@ export class WorkoutCues {
     const cue = phase === "cycleRest" ? "rest" : phase;
     const workFile = cue === "work" ? style.workFile : undefined;
     const voice = settings.voice ? this.#load(`voice-${cue}`) : undefined;
-    const clip = settings.sound ? await this.#load(workFile ?? style.file) : undefined;
+    const loading = settings.sound ? this.#load(workFile ?? style.file) : undefined;
+    if (this.#media) {
+      return this.#media.play(cue, settings, async () => {
+        const [clip, speech] = await Promise.all([loading, voice]);
+        if (!clip && !speech) return;
+        const { tracks, voiceAt } = phaseTracks(clip, style, cue, volume, Boolean(speech));
+        if (speech) tracks.push({ clip: speech, offset: voiceAt, volume, rate: 1, ring: Infinity });
+        const seconds = Math.max(...tracks.map((track) => track.offset + Math.min(track.ring, track.clip.duration / track.rate)));
+        return renderCue(seconds, (output) => {
+          for (const note of tracks) this.#start(output, note.clip, note.offset, note.volume, note.rate, note.ring);
+        });
+      });
+    }
+    const clip = await loading;
     if (sequence !== this.#sequence || context.state !== "running") return;
 
-    let speechStart = context.currentTime;
-    if (clip) {
-      const start = context.currentTime;
-      const notes = (style.phrases ?? BELL_PHRASES)[cue];
-      const speechOffset = Math.max(notes.at(-1)[0] + .32, workFile ? clip.duration : 0);
-      for (const [offset, pitch, level] of notes) {
-        const rate = 2 ** ((pitch + style.transpose) / 12);
-        const ring = voice ? speechOffset - offset : Infinity;
-        this.#start(clip, start + offset, volume * style.gain * level, rate, ring);
-      }
-      speechStart = start + speechOffset;
-    }
+    const start = context.currentTime;
+    const { tracks, voiceAt } = phaseTracks(clip, style, cue, volume, Boolean(voice));
+    for (const note of tracks) this.#start(context, note.clip, start + note.offset, note.volume, note.rate, note.ring);
 
     const speech = await voice;
     if (speech && sequence === this.#sequence && context.state === "running") {
-      this.#start(speech, Math.max(speechStart, context.currentTime), volume);
+      this.#start(context, speech, Math.max(start + voiceAt, context.currentTime), volume);
     }
   }
 }

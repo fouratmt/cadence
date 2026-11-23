@@ -1,1 +1,1 @@
-globalThis.CADENCE_VERSION = "1.4.3";
+globalThis.CADENCE_VERSION = "1.4.4";

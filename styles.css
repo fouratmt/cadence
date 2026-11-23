@@ -254,6 +254,8 @@ body.pale {
   overflow: hidden;
 }
 
+/* Keep controls above the countdown's oversized font bounds. */
+.phase-top { z-index: 1; }
 .timer-title {
   margin-block-end: 5px;
   font: 700 .875rem/1.25 system-ui, sans-serif;
